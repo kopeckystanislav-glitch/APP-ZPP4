@@ -19,6 +19,8 @@ from modules.auth import (
 # ============== Inicializace ==============
 ensure_admin_password()
 st.set_page_config(page_title="Aplikace pro vyšetřovatele požárů", layout="wide")
+st.caption("build: test-patch-001")
+
 
 # ============== Util / pomocné funkce ==============
 def normalize_text(text: str) -> str:
