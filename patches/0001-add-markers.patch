@@ -1,0 +1,257 @@
+--- a/modules/report.py
++++ b/modules/report.py
+@@ -1,9 +1,12 @@
++# >>> FILE_MARKERS_ENABLED
+ from __future__ import annotations
+ import json
+ import uuid
+ import shutil
+ from pathlib import Path
+ from datetime import datetime, time as dtime, timedelta
+ from typing import Dict, Any, List, Optional
+ 
+ import streamlit as st
+ from streamlit.components.v1 import html
++# <<< FILE_MARKERS_ENABLED
+ 
+@@ -11,9 +14,12 @@
+ REPORTS_BASE = Path("data") / "reports"
+ REPORTS_BASE.mkdir(parents=True, exist_ok=True)
+ 
++# >>> HELPERS_START
+@@ -69,6 +75,7 @@
+ def _fmt_addr(loc: Dict[str, Any]) -> str:
+     """Sestaví čitelnou adresu z detailních polí, pokud není 'address'."""
+     if not isinstance(loc, dict):
+         return ""
+@@ -104,6 +111,7 @@
+     return ", ".join([p for p in parts1 if p])
++# >>> HELPERS_END
+ 
++# >>> STORAGE_START
+@@ -112,6 +120,7 @@
+ def save_report(data: Dict[str, Any]) -> None:
+     """Uloží JSON do složky reportu. Zajistí vyplněné 'oec' a 'report_id'."""
+     rid = data.get("report_id")
+@@ -170,6 +179,7 @@
+     out.sort(key=lambda x: (x.get("updated_at") or "", x.get("created_at") or ""), reverse=True)
+     return out
++# >>> STORAGE_END
+ 
+@@ -206,6 +216,7 @@
+         "drawings": [],
+     }
+ 
++# >>> UI_HELPERS_START
+ def _inject_section_css() -> None:
+     """Jemné vizuální oddělení sekcí (karty)."""
+     if st.session_state.get("_report_css_injected"):
+@@ -236,10 +247,12 @@
+     )
+     st.session_state["_report_css_injected"] = True
+ 
+@@ -247,10 +260,12 @@
+     )
+ 
+ 
+ def _card_end():
+     st.markdown("</div>", unsafe_allow_html=True)
++# >>> UI_HELPERS_END
+ 
+ 
++# >>> RENDER_REPORT_START
+ # ========= Hlavní UI =========
+ def render_report() -> None:
+     """Editor reportů: záložky, vizuální karty, ukládání do JSON + mazání (sidebar i editor)."""
+@@ -263,6 +278,7 @@
+     st.session_state.setdefault("current_report_id", None)
+ 
+     st.markdown("### 📝 Report – evidence zjištění na požářišti")
+ 
++    # >>> SIDEBAR_START
+     # ---- Sidebar ----
+     with st.sidebar:
+         st.markdown("#### 📂 Moje reporty")
+@@ -303,8 +319,10 @@
+         else:
+             st.info("Zatím nemáš žádné uložené reporty.")
+ 
+         st.markdown("---")
+         new_btn_sidebar = st.button("➕ Nový report", use_container_width=True, key="report_btn_new_sidebar")
++    # <<< SIDEBAR_END
+ 
++    # >>> NEW_OPEN_ACTIONS_START
+     # Akce: nový (sidebar)
+     if new_btn_sidebar:
+         new_id = _new_report_id(oec)
+@@ -325,16 +343,20 @@
+     if open_btn and chosen:
+         st.session_state.current_report_id = chosen
+         st.rerun()
+ 
+     # One-shot: otevři report po založení
+     if st.session_state.get("_open_on_next_run"):
+         st.session_state.current_report_id = st.session_state.pop("_open_on_next_run")
+         st.rerun()
++    # <<< NEW_OPEN_ACTIONS_END
+ 
++    # >>> CTA_NO_SELECTED_START
+     # ---- Pokud není vybrán report, ukážeme CTA (bez auto-open) ----
+     if not st.session_state.current_report_id:
+         st.info("Vyber existující report v levém panelu nebo založ nový.")
+         if st.button("➕ Založit nový report", key="report_btn_new_main", use_container_width=True):
+             new_id = _new_report_id(oec)
+             data = _empty_report(oec, new_id)
+             try:
+                 save_report(data)
+             except Exception as e:
+                 st.error(f"Ukládání selhalo: {e}")
+                 st.stop()
+             st.session_state["_open_on_next_run"] = new_id
+             st.rerun()
+         # reset potlačení po jednom běhu
+         if st.session_state.get("_suppress_auto_open"):
+             st.session_state["_suppress_auto_open"] = False
+         st.stop()
++    # <<< CTA_NO_SELECTED_END
+ 
++    # >>> EDITOR_PREP_START
+     # ---- Editor vybraného reportu ----
+     report_id = st.session_state.current_report_id
+     data = load_report(report_id) or _empty_report(oec, report_id)
+@@ -375,9 +397,12 @@
+         try: save_report(data)
+         except Exception as e: st.warning(f"Autoopravné uložení selhalo: {e}")
+ 
+     st.markdown(f"**Report ID:** `{report_id}`")
++    # <<< EDITOR_PREP_END
++
++    # >>> TOPBAR_CLOSE_START
+     if st.button("⬅️ Zavřít report", key=f"report_close_btn_top_{report_id}", use_container_width=True):
+         st.session_state.current_report_id = None
+         st.session_state["_suppress_auto_open"] = True
+         st.rerun()
++    # <<< TOPBAR_CLOSE_END
+ 
++    # >>> GEO_FROM_URL_START
+     # Geolokace z URL (HTTPS only)
+     params = st.query_params
+     geo_lat = params.get("geo_lat"); geo_lon = params.get("geo_lon")
+@@ -392,10 +417,12 @@
+                 if "geo_ts" in params: del params["geo_ts"]
+             except Exception:
+                 pass
+         except (TypeError, ValueError):
+             pass
++    # <<< GEO_FROM_URL_END
+ 
++    # >>> FORM_START
+     # ====== FORM + TABS ======
+     with st.form(f"report_form_{report_id}"):
+         tab_event, tab_people, tab_cond, tab_find, tab_notes = st.tabs(
+             ["Událost", "Účastníci", "Podmínky", "Zjištění", "Poznámky"]
+         )
+@@ -403,6 +430,7 @@
+         # --- Událost ---
+         with tab_event:
++            # >>> EVENT_SECTION_START
+             _card("Identifikace události", icon="📌", tag="Sekce 1")
+ 
+             c_dt1, c_dt2, c_dt3 = st.columns(3)
+             with c_dt1:
+@@ -457,8 +485,10 @@
+ 
+             st.text_area("Popis události", value=ev.get("description", ""), key=f"report_desc_{report_id}", height=120)
+             _card_end()
++            # <<< EVENT_SECTION_END
+ 
+         # --- Účastníci ---
+         with tab_people:
++            # >>> PEOPLE_SECTION_START
+             _card("Zúčastněné osoby a jednotky", icon="👥", tag="Sekce 2")
+             c6, c7, c8 = st.columns(3)
+             with c6:
+@@ -471,8 +501,10 @@
+                 units = st.text_input("Jednotky / složky", value=data["participants"].get("units", ""))
+             assist = st.text_input("Asistující orgány (Policie ČR, znalci…)", value=data["participants"].get("assist", ""))
+             _card_end()
++            # <<< PEOPLE_SECTION_END
+ 
+         # --- Podmínky ---
+         with tab_cond:
++            # >>> CONDITIONS_SECTION_START
+             _card("Podmínky prostředí", icon="🌦️", tag="Sekce 3")
+             c9, c10, c11 = st.columns(3)
+             with c9:
+@@ -482,8 +514,10 @@
+                 visibility = st.text_input("Viditelnost", value=data["conditions"].get("visibility", ""))
+             _card_end()
++            # <<< CONDITIONS_SECTION_END
+ 
+         # --- Zjištění ---
+         with tab_find:
++            # >>> FINDINGS_SECTION_START
+             _card("Technická zjištění", icon="🛠️", tag="Sekce 4")
+             c12, c13, c14 = st.columns(3)
+             with c12:
+@@ -494,17 +528,21 @@
+                 damage_estimate_czk = st.number_input("Odhad škody [Kč]", value=float(data["findings"].get("damage_estimate_czk") or 0.0), step=1000.0, format="%.0f")
+             _card_end()
++            # <<< FINDINGS_SECTION_END
+ 
+         # --- Poznámky ---
+         with tab_notes:
++            # >>> NOTES_SECTION_START
+             _card("Volné poznámky", icon="📝", tag="Sekce 5")
+             notes = st.text_area("Poznámky", value=data.get("notes", ""), height=160)
+             _card_end()
++            # <<< NOTES_SECTION_END
+ 
++        # >>> GEOLOC_ACTION_START
+         # === Akce bez uložení (geolokace) ===
+         if 'geo_submit' in locals() and geo_submit:
+             html("""
+                 <script>(function(){
+                   if (!navigator.geolocation) { alert("Geolokace není dostupná."); return; }
+@@ -521,8 +559,10 @@
+                 """, height=0)
+             st.stop()
++        # <<< GEOLOC_ACTION_END
+ 
++        # >>> SAVE_BUTTONS_START
+         # --- Uložení ---
+         col_save, col_close = st.columns([1, 1])
+         save_draft = col_save.form_submit_button("💾 Uložit průběh", use_container_width=True)
+         save_and_close = col_close.form_submit_button("✅ Uložit a zavřít", use_container_width=True)
++        # <<< SAVE_BUTTONS_END
+ 
++        # >>> SAVE_HANDLER_START
+         if save_draft or save_and_close:
+             data["updated_at"] = _now_iso()
+             data["oec"] = oec
+@@ -574,10 +614,13 @@
+                 if save_and_close:
+                     st.session_state.current_report_id = None
+                     st.session_state["_suppress_auto_open"] = True
+                 st.rerun()
++        # <<< SAVE_HANDLER_END
+- 
++    # <<< FORM_END
++
+     st.markdown("---")
++    # >>> DELETE_SECTION_START
+     with st.expander("🗑️ Smazat tento report", expanded=False):
+         col1, col2 = st.columns([1, 1])
+         confirm = col1.checkbox("Rozumím, chci smazat", key=f"del_confirm_{report_id}")
+@@ -592,8 +635,11 @@
+             except Exception as e:
+                 st.error(f"Chyba při mazání: {e}")
++    # <<< DELETE_SECTION_END
+ 
++    # >>> BACK_BUTTON_START
+     if st.button("⬅️ Zpět na výběr reportu", key=f"report_back_bottom_{report_id}", use_container_width=True):
+         st.session_state.current_report_id = None
+         st.session_state["_suppress_auto_open"] = True
+         st.rerun()
++    # <<< BACK_BUTTON_END
++# >>> RENDER_REPORT_END

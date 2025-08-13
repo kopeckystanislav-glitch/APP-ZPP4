@@ -1,0 +1,27 @@
+*** /dev/null
+--- b/.gitattributes
+@@
++# V repozitáři udržuj textové soubory s LF (konec řádku \n)
++# Lokálně na Windows se klidně můžou checkoutnout jako CRLF, pokud použiješ core.autocrlf=true
++* text=auto eol=lf
++
++# Binární soubory nikdy nepřevádět
++*.png binary
++*.jpg binary
++*.jpeg binary
++*.webp binary
++*.gif binary
++*.pdf binary
++*.xlsx binary
++*.xls binary
++*.docx binary
++*.pptx binary
++
++# (Volitelně) explicitně označ běžné textové typy
++*.py text eol=lf
++*.md text eol=lf
++*.json text eol=lf
++*.yaml text eol=lf
++*.yml text eol=lf
++*.toml text eol=lf
++*.csv text eol=lf

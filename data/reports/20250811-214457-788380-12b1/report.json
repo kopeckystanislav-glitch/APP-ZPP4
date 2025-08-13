@@ -1,0 +1,41 @@
+{
+  "schema_version": 1,
+  "report_id": "20250811-214457-788380-12b1",
+  "created_at": "2025-08-11T21:44:57",
+  "updated_at": "2025-08-11T21:45:20",
+  "oec": "788380",
+  "event": {
+    "title": "11.08.2025 21:44 — OEČ 788380",
+    "event_number": "111",
+    "date": "2025-08-11",
+    "time": "21:44",
+    "location": {
+      "address": "111",
+      "gps_lat": null,
+      "gps_lon": null
+    },
+    "object_type": "",
+    "description": "111"
+  },
+  "participants": {
+    "investigators": [
+      "788380"
+    ],
+    "commander": "",
+    "units": "",
+    "assist": ""
+  },
+  "conditions": {
+    "weather": "",
+    "temperature_c": 0.0,
+    "visibility": ""
+  },
+  "findings": {
+    "origin": "",
+    "cause": "",
+    "damage_estimate_czk": 0.0
+  },
+  "notes": "",
+  "photos": [],
+  "drawings": []
+}

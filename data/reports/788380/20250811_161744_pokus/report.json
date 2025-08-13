@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "version": 1,
+    "saved_at": "2025-08-11T16:17:44.351515",
+    "user_oec": "788380",
+    "case_tag": "20250811_161744_pokus"
+  },
+  "case": {
+    "case_id": "pokus",
+    "event_date": "2025-08-11",
+    "event_time": "16:17:44",
+    "detection_time": null,
+    "district": "",
+    "address": "Strážov",
+    "gps": "",
+    "object_type": "Byt / RD",
+    "ignition_area": "",
+    "damage_est": "",
+    "police_involvement": "Ano – přivolána",
+    "suspected_causes": [
+      "Elektrická instalace / spotřebič",
+      "Úmyslné zapálení",
+      "Samovznícení"
+    ],
+    "notes": "dsfafsafd"
+  },
+  "files": {
+    "photos": [],
+    "schema": null
+  }
+}

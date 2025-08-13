@@ -1,0 +1,16 @@
+--- a/modules/report.py
++++ b/modules/report.py
+@@
+         with tab_cond:
+             # >>> CONDITIONS_SECTION_START
+             _card("Podmínky prostředí", icon="🌦️", tag="Sekce 3")
+             c9, c10, c11 = st.columns(3)
+             with c9:
+                 weather = st.text_input("Počasí", value=data["conditions"].get("weather", ""))
+             with c10:
+-                temperature_c = st.number_input("Teplota [°C]", value=float(data["conditions"].get("temperature_c") or 0.0), step=0.5, format="%.1f")
++                temperature_c = st.number_input("Teplota [°C]", value=float(data["conditions"].get("temperature_c") or 0.0), step=1.0, format="%.0f")
+             with c11:
+                 visibility = st.text_input("Viditelnost", value=data["conditions"].get("visibility", ""))
+             _card_end()
+             # <<< CONDITIONS_SECTION_END
