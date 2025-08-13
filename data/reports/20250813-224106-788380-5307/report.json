@@ -1,0 +1,53 @@
+{
+  "schema_version": 2,
+  "report_id": "20250813-224106-788380-5307",
+  "created_at": "2025-08-13T22:41:06",
+  "updated_at": "2025-08-13T22:41:06",
+  "oec": "788380",
+  "event": {
+    "title": "13.08.2025 22:41 — OEČ 788380",
+    "date_occurrence": "2025-08-13",
+    "time_occurrence": "22:41",
+    "date_observed": "2025-08-13",
+    "time_observed": "22:41",
+    "date_kopis": "2025-08-13",
+    "time_kopis": "22:41",
+    "date": "2025-08-13",
+    "time": "22:41",
+    "event_number": "",
+    "object_type": "",
+    "description": "",
+    "location": {
+      "region": "",
+      "city": "",
+      "street": "",
+      "house_number": "",
+      "orientation_number": "",
+      "parcel_number": "",
+      "address": "",
+      "gps_lat": null,
+      "gps_lon": null
+    }
+  },
+  "participants": {
+    "investigators": [
+      "788380"
+    ],
+    "commander": "",
+    "units": "",
+    "assist": ""
+  },
+  "conditions": {
+    "weather": "",
+    "temperature_c": null,
+    "visibility": ""
+  },
+  "findings": {
+    "origin": "",
+    "cause": "",
+    "damage_estimate_czk": null
+  },
+  "notes": "",
+  "photos": [],
+  "drawings": []
+}
