@@ -1,0 +1,10 @@
+# V repu vždy LF (bez ohledu na OS)
+* text=auto eol=lf
+
+# Binárky/obrázky nech nesahej
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.webp binary
+*.pdf binary
+*.xlsx binary
