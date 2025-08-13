@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "version": 1,
+    "saved_at": "2025-08-11T16:27:59.070280",
+    "user_oec": "788380",
+    "case_tag": "20250811_162759_pokus"
+  },
+  "case": {
+    "case_id": "pokus",
+    "event_date": "2025-08-11",
+    "event_time": "16:27:59",
+    "detection_time": null,
+    "district": "",
+    "address": "Strážov",
+    "gps": "",
+    "object_type": "Byt / RD",
+    "ignition_area": "",
+    "damage_est": "",
+    "police_involvement": "Ne",
+    "suspected_causes": [
+      "Neznámé / v šetření"
+    ],
+    "notes": "dsfasfda"
+  },
+  "files": {
+    "photos": [],
+    "schema": null
+  }
+}

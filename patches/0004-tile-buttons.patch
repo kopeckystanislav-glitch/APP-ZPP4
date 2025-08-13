@@ -1,0 +1,86 @@
+--- a/app.py
++++ b/app.py
+@@
+ st.markdown("""
+ <style>
+   h1.app-title {
+@@
+   }
+   .big-btn > button {
+     font-size: 20px !important;
+     padding-top: 16px !important;
+     padding-bottom: 16px !important;
+     border-radius: 10px !important;
+     font-weight: 600 !important;
+   }
++  /* Dlaždice pro MODULY a PODMODULY – výrazně větší ikony */
++  .tile-btn > button {
++    font-size: 30px !important;              /* větší text = větší emoji/ikona */
++    padding-top: 18px !important;
++    padding-bottom: 18px !important;
++    border-radius: 14px !important;
++    font-weight: 700 !important;
++    box-shadow: 0 2px 8px rgba(0,0,0,.06) !important;
++  }
+ </style>
+ """, unsafe_allow_html=True)
+@@
+ if st.session_state.zvolen_modul is None:
+     st.markdown("## 📂 Moduly")
+     c1, c2 = st.columns(2)
+     with c1:
+-        st.markdown('<div class="big-btn">', unsafe_allow_html=True)
++        st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+         if st.button("🔥 Požáry", key="btn_pozary", use_container_width=True):
+             navigate_to("pozary", None)
+         st.markdown('</div>', unsafe_allow_html=True)
+     with c2:
+-        st.markdown('<div class="big-btn">', unsafe_allow_html=True)
++        st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+         if st.button("🧰 Podpora", key="btn_podpora", use_container_width=True):
+             navigate_to("podpora", None)
+         st.markdown('</div>', unsafe_allow_html=True)
+@@
+     if st.session_state.pozary_submodul is None:
+         st.markdown("### Vyber podmodul")
+         c1, c2 = st.columns(2)
+         with c1:
+-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
++            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+             if st.button("✅ Checklist", key="pozary_checklist", use_container_width=True):
+                 st.session_state.pozary_submodul = "checklist"
+                 st.rerun()
+             st.markdown('</div>', unsafe_allow_html=True)
+         with c2:
+-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
++            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+             if st.button("📝 Report", key="pozary_report", use_container_width=True):
+                 st.session_state.pozary_submodul = "report"
+                 st.rerun()
+             st.markdown('</div>', unsafe_allow_html=True)
+@@
+     if st.session_state.aktivni_podmodul is None:
+         st.markdown("## 🧰 Modul: Podpora")
+         c1, c2 = st.columns(2)
+         with c1:
+-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
++            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+             if st.button("📌 PTCH", key="btn_ptch", use_container_width=True):
+                 st.session_state.aktivni_podmodul = "PTCH"
+                 st.rerun()
+             if st.button("💥 Iniciátory", key="btn_iniciatory", use_container_width=True):
+                 st.session_state.aktivni_podmodul = "INICIÁTORY"
+                 st.rerun()
+             st.markdown('</div>', unsafe_allow_html=True)
+         with c2:
+-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
++            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+             if st.button("📖 Normy", key="btn_normy", use_container_width=True):
+                 st.session_state.aktivni_podmodul = "NORMY"
+                 st.rerun()
+             if st.button("📎 Jiné", key="btn_jine", use_container_width=True):
+                 st.warning("Tento podmodul zatím není implementován.")
+                 st.markdown('<div class="big-btn">', unsafe_allow_html=True)
+                 back_button("jine")
+                 st.markdown('</div>', unsafe_allow_html=True)
+             st.markdown('</div>', unsafe_allow_html=True)

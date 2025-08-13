@@ -1,0 +1,31 @@
+{
+  "meta": {
+    "version": 1
+  },
+  "users": [
+    {
+      "oec": "123456",
+      "role": "admin",
+      "password_hash": "$2b$12$zuOSjim8XWAHPSgA1bgDpe6UC1zteWro.PkymWAxhdkGA.qpUvyC2",
+      "first_name": "Stanislav",
+      "last_name": "Kopecký",
+      "phone": "",
+      "email": "stanislav@example.com",
+      "region": "Plzeňský",
+      "workplace": "HZS Rokycany",
+      "active": true
+    },
+    {
+      "oec": "788380",
+      "role": "user",
+      "first_name": "Stanislav ",
+      "last_name": "Kopecký",
+      "phone": "775569930",
+      "email": "stanislav.kopecky@centrum.cz",
+      "region": "Česko",
+      "workplace": "788380",
+      "active": true,
+      "password_hash": "$2b$12$QSEK8Uwx.5fFq36MRXzgSu5MmXE9EKVLUEG1EcJiFMEQvT.XO69R."
+    }
+  ]
+}
