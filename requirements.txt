@@ -4,3 +4,4 @@ openpyxl
 streamlit-aggrid
 PyPDF2
 pdfplumber
+python-dotenv
