@@ -13,20 +13,18 @@ from modules.auth import (
     current_user,
     ensure_admin_password,
     render_admin_panel,
-    render_account_panel
+    render_account_panel,
 )
 
 # ============== Inicializace ==============
 ensure_admin_password()
 st.set_page_config(page_title="Aplikace pro vyšetřovatele požárů", layout="wide")
-st.caption("build: test-patch-001")
-
 
 # ============== Util / pomocné funkce ==============
 def normalize_text(text: str) -> str:
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', str(text))
-        if unicodedata.category(c) != 'Mn'
+    return "".join(
+        c for c in unicodedata.normalize("NFD", str(text))
+        if unicodedata.category(c) != "Mn"
     ).lower()
 
 def filter_df(df: pd.DataFrame, q_all: str = "", q_col: str = "", col_name: str | None = None) -> pd.DataFrame:
@@ -53,7 +51,6 @@ def back_button(area_key: str):
         navigate_to(None, None)
 
 def open_pdf_new_tab(cesta: str):
-    """Otevře PDF v nové kartě pomocí BLOB URL (spolehlivé na tabletech/Chrome)."""
     if not os.path.exists(cesta):
         st.error(f"Soubor {cesta} nebyl nalezen.")
         return
@@ -92,7 +89,8 @@ if "pozary_submodul" not in st.session_state:
     st.session_state.pozary_submodul = None  # "checklist" | "report" | None
 
 # ============== CSS ==============
-st.markdown("""
+st.markdown(
+    """
 <style>
   h1.app-title {
     text-align:center;
@@ -103,19 +101,47 @@ st.markdown("""
     line-height: 1.25;
     margin-top: 6px; margin-bottom: 6px;
   }
-  .big-btn > button {
-    font-size: 20px !important;
-    padding-top: 16px !important;
-    padding-bottom: 16px !important;
+
+  /* Ovládací tlačítka (Zpět, Domů, Odhlásit...) */
+  .big-btn [data-testid="stButton"] > button {
+    font-size: 18px !important;
+    padding: 12px 14px !important;
     border-radius: 10px !important;
-    font-weight: 600 !important;
+    font-weight: 650 !important;
+  }
+
+  /* ====== Kartičky (dlaždice) pro MODULY a PODMODULY ====== */
+  /* důležité: Streamlit obaluje button do divu [data-testid=stButton] */
+  .tile-btn [data-testid="stButton"] { width: 100% !important; }
+  .tile-btn [data-testid="stButton"] > button {
+    width: 100% !important;
+    height: 140px !important;
+    display: grid !important;
+    place-items: center !important;
+    white-space: pre-line !important;     /* umožní \n v textu tlačítka */
+    background: #ffffff !important;
+    border: 1px solid #e8e8ef !important;
+    border-radius: 18px !important;
+    box-shadow: 0 10px 22px rgba(0,0,0,.08) !important;
+    font-size: 26px !important;
+    font-weight: 800 !important;
+    letter-spacing: .2px !important;
+  }
+  .tile-btn [data-testid="stButton"] > button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 16px 28px rgba(0,0,0,.12) !important;
+  }
+  .tile-btn [data-testid="stButton"] + [data-testid="stButton"] {
+    margin-top: 12px !important;
   }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # ============== Horní lišta ==============
 st.markdown("<h1 class='app-title'>🔎 Aplikace pro vyšetřovatele požárů 🔎</h1>", unsafe_allow_html=True)
-tb1, tb2 = st.columns([1,1], gap="small")
+tb1, tb2 = st.columns([1, 1], gap="small")
 with tb1:
     st.markdown('<div class="big-btn">', unsafe_allow_html=True)
     if st.button("⬅️ Zpět", key="top_back", use_container_width=True):
@@ -123,29 +149,14 @@ with tb1:
             navigate_to(st.session_state.zvolen_modul, None)
         else:
             navigate_to(None, None)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 with tb2:
     st.markdown('<div class="big-btn">', unsafe_allow_html=True)
     if st.button("🏠 Domů", key="top_home", use_container_width=True):
         navigate_to(None, None)
-    st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown("</div>", unsafe_allow_html=True)
 
 st.markdown("---")
-
-# ============== Moduly ==============
-if st.session_state.zvolen_modul is None:
-    st.markdown("## 📂 Moduly")
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-        if st.button("🔥 Požáry", key="btn_pozary", use_container_width=True):
-            navigate_to("pozary", None)
-        st.markdown('</div>', unsafe_allow_html=True)
-    with c2:
-        st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-        if st.button("🧰 Podpora", key="btn_podpora", use_container_width=True):
-            navigate_to("podpora", None)
-        st.markdown('</div>', unsafe_allow_html=True)
 
 # ============== Přihlášení (sidebar) ==============
 render_login(sidebar=True)
@@ -168,6 +179,24 @@ if not user:
 
 st.session_state["oec"] = user.get("oec")
 
+# ============== Moduly (root) ==============
+if st.session_state.zvolen_modul is None:
+    st.markdown("## 📂 Moduly")
+    c1, c2 = st.columns(2)
+
+    with c1:
+        # dvouřádkový popisek: emoji na prvním řádku, název na druhém
+        st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+        if st.button("🔥\nPožáry", key="btn_pozary", use_container_width=True):
+            navigate_to("pozary", None)
+        st.markdown("</div>", unsafe_allow_html=True)
+
+    with c2:
+        st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+        if st.button("🧰\nPodpora", key="btn_podpora", use_container_width=True):
+            navigate_to("podpora", None)
+        st.markdown("</div>", unsafe_allow_html=True)
+
 # ============== Admin / Účet ==============
 if st.session_state.get("zvolen_modul") == "admin":
     render_admin_panel()
@@ -185,7 +214,7 @@ elif st.session_state.zvolen_modul == "pozary":
         st.markdown("Zadej svůj **OEČ** (šestimístné osobní číslo).")
         with st.form("form_oec", clear_on_submit=False):
             oec_in = st.text_input("OEČ", value="", max_chars=6, help="Zadej 6 číslic bez mezer.", placeholder="např. 123456")
-            col_l, col_r = st.columns([1,1])
+            col_l, col_r = st.columns([1, 1])
             with col_l:
                 submit = st.form_submit_button("Pokračovat", use_container_width=True)
             with col_r:
@@ -209,29 +238,30 @@ elif st.session_state.zvolen_modul == "pozary":
         st.markdown("### Vyber podmodul")
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-            if st.button("✅ Checklist", key="pozary_checklist", use_container_width=True):
+            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+            if st.button("✅\nChecklist", key="pozary_checklist", use_container_width=True):
                 st.session_state.pozary_submodul = "checklist"
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         with c2:
-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-            if st.button("📝 Report", key="pozary_report", use_container_width=True):
+            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+            if st.button("📝\nReport", key="pozary_report", use_container_width=True):
                 st.session_state.pozary_submodul = "report"
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
+        # menší ovládací
         st.markdown('<div class="big-btn">', unsafe_allow_html=True)
         if st.button("🚪 Odhlásit OEČ", key="pozary_logout", use_container_width=True):
             st.session_state.oec = None
             st.session_state.pozary_submodul = None
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
         st.markdown('<div class="big-btn">', unsafe_allow_html=True)
         if st.button("⬅️ Zpět na moduly", key="pozary_back_root", use_container_width=True):
             navigate_to(None, None)
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
         st.stop()
 
     # 3) Podmoduly
@@ -242,7 +272,7 @@ elif st.session_state.zvolen_modul == "pozary":
         if st.button("⬅️ Zpět na výběr", key="pozary_back_from_checklist", use_container_width=True):
             st.session_state.pozary_submodul = None
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     elif st.session_state.pozary_submodul == "report":
         render_report()
@@ -251,7 +281,7 @@ elif st.session_state.zvolen_modul == "pozary":
             st.session_state.current_report_id = None
             st.session_state.pozary_submodul = None
             st.rerun()
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 # ============== Modul: Podpora ==============
 elif st.session_state.zvolen_modul == "podpora":
@@ -260,25 +290,25 @@ elif st.session_state.zvolen_modul == "podpora":
         st.markdown("## 🧰 Modul: Podpora")
         c1, c2 = st.columns(2)
         with c1:
-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-            if st.button("📌 PTCH", key="btn_ptch", use_container_width=True):
+            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+            if st.button("📌\nPTCH", key="btn_ptch", use_container_width=True):
                 st.session_state.aktivni_podmodul = "PTCH"
                 st.rerun()
-            if st.button("💥 Iniciátory", key="btn_iniciatory", use_container_width=True):
+            if st.button("💥\nIniciátory", key="btn_iniciatory", use_container_width=True):
                 st.session_state.aktivni_podmodul = "INICIÁTORY"
                 st.rerun()
-            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
         with c2:
-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-            if st.button("📖 Normy", key="btn_normy", use_container_width=True):
+            st.markdown('<div class="tile-btn">', unsafe_allow_html=True)
+            if st.button("📖\nNormy", key="btn_normy", use_container_width=True):
                 st.session_state.aktivni_podmodul = "NORMY"
                 st.rerun()
-            if st.button("📎 Jiné", key="btn_jine", use_container_width=True):
+            if st.button("📎\nJiné", key="btn_jine", use_container_width=True):
                 st.warning("Tento podmodul zatím není implementován.")
                 st.markdown('<div class="big-btn">', unsafe_allow_html=True)
                 back_button("jine")
-                st.markdown('</div>', unsafe_allow_html=True)
-            st.markdown('</div>', unsafe_allow_html=True)
+                st.markdown("</div>", unsafe_allow_html=True)
+            st.markdown("</div>", unsafe_allow_html=True)
 
     elif st.session_state.aktivni_podmodul == "PTCH":
         st.subheader("📌 PTCH")
@@ -299,7 +329,7 @@ elif st.session_state.zvolen_modul == "podpora":
             st.error(f"Chyba při načítání PTCH: {e}")
         st.markdown('<div class="big-btn">', unsafe_allow_html=True)
         back_button("ptch")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     elif st.session_state.aktivni_podmodul == "INICIÁTORY":
         st.subheader("💥 Iniciátory")
@@ -320,24 +350,11 @@ elif st.session_state.zvolen_modul == "podpora":
             st.error(f"Chyba při načítání Iniciátorů: {e}")
         st.markdown('<div class="big-btn">', unsafe_allow_html=True)
         back_button("iniciatory")
-        st.markdown('</div>', unsafe_allow_html=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 
     elif st.session_state.aktivni_podmodul == "NORMY":
-        st.subheader("📖 Normy (otevře se vždy v nové kartě)")
-        normy = {
-            "ČSN 061008 – Požární bezpečnost tepelných zařízení": "pdf/ČSN 061008.pdf",
-            "ČSN 730872 – Ochrana staveb proti šíření požáru vzduchotechnických zařízení": "pdf/ČSN 730872.pdf",
-            "ČSN 734230 – Krby s otevřeným a uzavíratelným ohništěm": "pdf/ČSN 734230.pdf",
-            "ČSN 734201 – Komíny a kouřovody": "pdf/ČSN 734201.pdf",
-        }
-        for nazev, cesta in normy.items():
-            st.markdown('<div class="big-btn">', unsafe_allow_html=True)
-            if st.button(nazev, key=f"btn_norm_{nazev}", use_container_width=True):
-                open_pdf_new_tab(cesta)
-            st.markdown('</div>', unsafe_allow_html=True)
-
+        st.subheader("📖 Normy")
+        st.info("Tento podmodul zatím není implementován.")
         st.markdown('<div class="big-btn">', unsafe_allow_html=True)
         back_button("normy")
-        st.markdown('</div>', unsafe_allow_html=True)
-
-# Pozn.: žádné duplicitní volání render_admin_panel() už níže není.
+        st.markdown("</div>", unsafe_allow_html=True)
