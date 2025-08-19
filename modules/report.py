@@ -1,696 +1,910 @@
 # modules/report.py
-# >>> FILE_MARKERS_ENABLED
 from __future__ import annotations
+
 import json
 import uuid
-import shutil
+import datetime as dt
 from pathlib import Path
-from datetime import datetime, time as dtime, timedelta
-from typing import Dict, Any, List, Optional
+import re
+from typing import Dict, List, Any, Optional
+import base64
 
 import streamlit as st
-from streamlit.components.v1 import html
-# <<< FILE_MARKERS_ENABLED
 
-# ========= Cesty a init =========
-REPORTS_BASE = Path("data") / "reports"
-REPORTS_BASE.mkdir(parents=True, exist_ok=True)
+# volitelné moduly pro kreslení a obrázky
+try:
+    from streamlit_drawable_canvas import st_canvas  # ponecháno do budoucna
+    HAS_CANVAS = True
+except Exception:
+    HAS_CANVAS = False
 
-# >>> HELPERS_START
-# ========= Pomocné =========
-def _now_iso() -> str:
-    return datetime.now().isoformat(timespec="seconds")
+try:
+    from PIL import Image
+    HAS_PIL = True
+except Exception:
+    HAS_PIL = False
+
+# ============ Konstanty a pomocné věci ============
+REPORTS_DIR = Path("reports")
+REPORTS_DIR.mkdir(parents=True, exist_ok=True)
 
 
-def _new_report_id(oec: str) -> str:
-    """ID: YYYYMMDD-HHMMSS-OEC-rand4"""
-    ts = datetime.now().strftime("%Y%m%d-%H%M%S")
-    rnd = uuid.uuid4().hex[:4]
-    return f"{ts}-{oec}-{rnd}"
+def _now() -> dt.datetime:
+    return dt.datetime.now()
 
 
-def _report_dir(report_id: str) -> Path:
-    d = REPORTS_BASE / report_id
+def _safe_date(val) -> dt.date:
+    if isinstance(val, dt.date):
+        return val
+    if isinstance(val, str) and val:
+        try:
+            return dt.date.fromisoformat(val)
+        except Exception:
+            pass
+    return dt.date.today()
+
+
+def _safe_time(val) -> dt.time:
+    if isinstance(val, dt.time):
+        return val
+    if isinstance(val, str) and val:
+        try:
+            parts = val.split(":")
+            if len(parts) >= 2:
+                h, m = int(parts[0]), int(parts[1])
+                s = int(parts[2]) if len(parts) > 2 else 0
+                return dt.time(hour=h, minute=m, second=s)
+        except Exception:
+            pass
+    return dt.time(0, 0, 0)
+
+
+def _read_json(p: Path) -> Dict[str, Any]:
+    try:
+        with p.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
+def _write_json(p: Path, data: Dict[str, Any]) -> None:
+    p.parent.mkdir(parents=True, exist_ok=True)
+    tmp = p.with_suffix(".tmp")
+    with tmp.open("w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2, default=str)
+    tmp.replace(p)
+
+
+def _current_oec() -> Optional[str]:
+    return st.session_state.get("oec")
+
+
+def _get_query_params() -> Dict[str, Any]:
+    try:
+        return dict(st.query_params)
+    except Exception:
+        return dict(st.experimental_get_query_params())
+
+
+def _set_query_params(params: Dict[str, Any]) -> None:
+    try:
+        st.query_params.update(params)
+    except Exception:
+        st.experimental_set_query_params(**params)
+
+
+def _gen_report_id(oec: str) -> str:
+    now = _now()
+    t = now.strftime("%H:%M")
+    d = now.strftime("%d.%m.%Y")
+    return f"{t}_{d}_{oec}"
+
+
+def _fs_safe(name: str) -> str:
+    return re.sub(r'[<>:"/\|?*]', '-', name)
+
+
+def _report_path(report_id: str) -> Path:
+    safe = _fs_safe(report_id)
+    return REPORTS_DIR / f"{safe}.json"
+
+
+def _ui_key(prefix: str, rid: str) -> str:
+    """Vytvoř UI-safe klíč (bez speciálních znaků)."""
+    safe = re.sub(r"[^0-9A-Za-z_]", "_", str(rid))
+    return f"{prefix}_{safe}"
+
+
+def _attachments_dir(report_id: str) -> Path:
+    d = REPORTS_DIR / _fs_safe(report_id)
     d.mkdir(parents=True, exist_ok=True)
     return d
 
 
-def _report_json_path(report_id: str) -> Path:
-    return _report_dir(report_id) / "report.json"
-
-
-def _default_title(oec: str, created_iso: Optional[str] = None) -> str:
-    """Výchozí název: datum + čas založení + OEČ (např. 11.08.2025 14:05 — OEČ 123456)."""
-    try:
-        dt = datetime.fromisoformat(created_iso) if created_iso else datetime.now()
-    except Exception:
-        dt = datetime.now()
-    return f"{dt.strftime('%d.%m.%Y %H:%M')} — OEČ {oec}"
-
-
-def _fmt_addr(loc: Dict[str, Any]) -> str:
-    """Sestaví čitelnou adresu z detailních polí, pokud není 'address'."""
-    if not isinstance(loc, dict):
-        return ""
-    if loc.get("address"):
-        return loc.get("address", "")
-    parts1 = []
-    if loc.get("street"):
-        num = " ".join(
-            p for p in [
-                str(loc.get("house_number") or "").strip(),
-                ("/" + str(loc.get("orientation_number")).strip()) if loc.get("orientation_number") else ""
-            ] if p
+def _list_reports_for(oec: Optional[str]) -> List[Dict[str, Any]]:
+    out = []
+    for p in sorted(REPORTS_DIR.glob("*.json")):
+        data = _read_json(p)
+        rid = data.get("meta", {}).get("id") or p.stem
+        title = data.get("meta", {}).get("title") or rid
+        owner_oec = data.get("meta", {}).get("oec")
+        created = data.get("meta", {}).get("created") or ""
+        out.append(
+            {"id": rid, "title": title, "oec": owner_oec, "created": created, "path": str(p)}
         )
-        parts1.append(f"{loc['street']}{(' ' + num) if num else ''}")
-    city = loc.get("city")
-    if city:
-        parts1.append(city)
-    kraj = loc.get("region")
-    if kraj:
-        parts1.append(kraj)
-    if loc.get("parcel_number"):
-        parts1.append(f"parc. č. {loc['parcel_number']}")
-    return ", ".join([p for p in parts1 if p])
-# >>> HELPERS_END
-
-# >>> STORAGE_START
-# ========= Uložení / načtení =========
-def save_report(data: Dict[str, Any]) -> None:
-    """Uloží JSON do složky reportu. Zajistí vyplněné 'oec' a 'report_id'."""
-    rid = data.get("report_id")
-    if not rid:
-        raise ValueError("report data missing 'report_id'")
-    if not data.get("oec"):
-        raise ValueError("report data missing 'oec'")
-    p = _report_json_path(rid)
-    p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
-
-
-def load_report(report_id: str) -> Optional[Dict[str, Any]]:
-    p = _report_json_path(report_id)
-    if not p.exists():
-        return None
-    try:
-        return json.loads(p.read_text(encoding="utf-8"))
-    except Exception:
-        return None
-
-
-def _collect_reports() -> List[Dict[str, Any]]:
-    """Načte metadata všech reportů (bez filtru)."""
-    out: List[Dict[str, Any]] = []
-    if not REPORTS_BASE.exists():
-        return out
-    for d in REPORTS_BASE.iterdir():
-        if d.is_dir():
-            rj = d / "report.json"
-            if rj.exists():
-                try:
-                    rec = json.loads(rj.read_text(encoding="utf-8"))
-                    loc = ((rec.get("event", {}) or {}).get("location", {}) or {})
-                    location_str = loc.get("address") or _fmt_addr(loc)
-                    out.append({
-                        "report_id": rec.get("report_id"),
-                        "created_at": rec.get("created_at"),
-                        "updated_at": rec.get("updated_at"),
-                        "oec": rec.get("oec"),
-                        "event_date": (rec.get("event", {}) or {}).get("date_occurrence") or (rec.get("event", {}) or {}).get("date"),
-                        "location": location_str,
-                        "object_type": (rec.get("event", {}) or {}).get("object_type", ""),
-                        "title": (rec.get("event", {}) or {}).get("title", ""),
-                    })
-                except Exception:
-                    pass
-    out.sort(key=lambda x: (x.get("updated_at") or "", x.get("created_at") or ""), reverse=True)
+    if oec:
+        out = [r for r in out if r.get("oec") == oec]
+    out.sort(key=lambda r: r.get("created", ""), reverse=True)
     return out
 
 
-def list_reports_for_oec(oec: str) -> List[Dict[str, Any]]:
-    """Seznam metadat reportů pro dané OEČ."""
-    all_items = _collect_reports()
-    return [r for r in all_items if r.get("oec") == oec]
-
-
-def _empty_report(oec: str, report_id: str) -> Dict[str, Any]:
-    now = _now_iso()
-    return {
-        "schema_version": 2,
-        "report_id": report_id,
-        "created_at": now,
-        "updated_at": now,
-        "oec": oec,
+def _ensure_report_skeleton(report_id: str, oec: str) -> Dict[str, Any]:
+    data = {
+        "meta": {
+            "id": report_id,
+            "oec": oec,
+            "created": _now().isoformat(timespec="seconds"),
+            "title": report_id,
+            "version": 3,
+        },
         "event": {
-            "title": _default_title(oec, now),
-
-            # detailní časová pole
-            "date_occurrence": datetime.now().strftime("%Y-%m-%d"),
-            "time_occurrence": datetime.now().strftime("%H:%M"),
-            "date_observed": datetime.now().strftime("%Y-%m-%d"),
-            "time_observed": datetime.now().strftime("%H:%M"),
-            "date_kopis": datetime.now().strftime("%Y-%m-%d"),
-            "time_kopis": datetime.now().strftime("%H:%M"),
-
-            # zpětná kompatibilita
-            "date": datetime.now().strftime("%Y-%m-%d"),
-            "time": datetime.now().strftime("%H:%M"),
-
-            "event_number": "",
-            "object_type": "",
-            "description": "",
-            "location": {
-                "region": "",
-                "city": "",
-                "street": "",
-                "house_number": "",
-                "orientation_number": "",
-                "parcel_number": "",
-                "address": "",
-                "gps_lat": None,
-                "gps_lon": None,
-            },
+            "datum_vzniku": _safe_date(None).isoformat(),
+            "cas_vzniku": _safe_time(None).strftime("%H:%M:%S"),
+            "datum_zpozorovani": _safe_date(None).isoformat(),
+            "cas_zpozorovani": _safe_time(None).strftime("%H:%M:%S"),
+            "datum_ohlaseni": _safe_date(None).isoformat(),
+            "cas_ohlaseni": _safe_time(None).strftime("%H:%M:%S"),
+            "adresa": {"kraj": "", "obec": "", "ulice": "", "cp": "", "co": "", "parcelni": "", "psc": ""},
+            "gps": {"lat": None, "lon": None, "pozn": ""},
         },
-        "participants": {
-            "investigators": [oec],
-            "commander": "",
-            "units": "",
-            "assist": "",
-        },
-        "conditions": {
-            "weather": "",
-            "temperature_c": None,
-            "visibility": "",
-        },
-        "findings": {
-            "origin": "",
-            "cause": "",
-            "damage_estimate_czk": None,
-        },
+        "conditions": {"weather": "", "temperature_c": 0, "visibility": ""},
+        "participants": {"owners": [], "users": []},
+        "witnesses": "",
+        "sketch": "",
+        "attachments": [],
         "notes": "",
-        "photos": [],
-        "drawings": [],
     }
-# >>> STORAGE_END
+    return data
 
-# >>> UI_HELPERS_START
-# ========= UI pomocné =========
-def _inject_section_css() -> None:
-    """Jemné vizuální oddělení sekcí (karty)."""
-    if st.session_state.get("_report_css_injected"):
-        return
+
+def _force_wide_layout_css():
+    """Zruší implicitní max-width kontejneru Streamlitu, aby canvas a toolbar nebyly 'useknuté' vpravo."""
     st.markdown(
         """
         <style>
-          .section-card {
-            border: 1px solid #e5e7eb;
-            background: #ffffff;
-            border-radius: 12px;
-            padding: 14px 14px 6px 14px;
-            margin-bottom: 12px;
-          }
-          .section-title {
-            font-weight: 700;
-            margin: 0 0 8px 0;
-            display: flex;
-            gap: 8px;
-            align-items: center;
-          }
-          .section-title .tag {
-            font-size: 12px;
-            background: #f1f5f9;
-            border: 1px solid #e2e8f0;
-            padding: 2px 8px;
-            border-radius: 9999px;
-          }
+        /* hlavní blok na plnou šířku */
+        .stAppViewContainer .main .block-container{
+            max-width: 100% !important;
+            padding-left: 1rem;
+            padding-right: 1rem;
+        }
+        /* komponenta s iframe = taky roztáhnout */
+        .element-container:has(> iframe){
+            width: 100% !important;
+        }
         </style>
         """,
         unsafe_allow_html=True,
     )
-    st.session_state["_report_css_injected"] = True
 
 
-def _card(title: str, tag: Optional[str] = None, icon: str = "🧩"):
-    st.markdown(
-        f"""
-        <div class="section-card">
-          <div class="section-title">{icon} {title}{' <span class="tag">'+tag+'</span>' if tag else ''}</div>
-        """,
-        unsafe_allow_html=True,
-    )
+# ============ Pomocné vstupy ============
+def _addr_inputs(base_key: str, data: Dict[str, str]) -> Dict[str, str]:
+    c1, c2 = st.columns(2)
+    with c1:
+        obec = st.text_input("Obec", value=(data or {}).get("obec", ""), key=f"{base_key}_obec")
+        ulice = st.text_input("Ulice", value=(data or {}).get("ulice", ""), key=f"{base_key}_ulice")
+    with c2:
+        cp_co = st.text_input("Číslo popisné/orientační", value=(data or {}).get("cp_co", ""), key=f"{base_key}_cpco")
+        psc = st.text_input("PSČ", value=(data or {}).get("psc", ""), key=f"{base_key}_psc")
+    return {"obec": obec, "ulice": ulice, "cp_co": cp_co, "psc": psc}
 
 
-def _card_end():
-    st.markdown("</div>", unsafe_allow_html=True)
-# >>> UI_HELPERS_END
+def _render_party_list(kind_label: str, key_prefix: str, items: List[Dict], report_id: str) -> List[Dict]:
+    st.markdown(f"### {kind_label}")
+    if items is None:
+        items = []
 
-# >>> RENDER_REPORT_START
-# ========= Hlavní UI =========
-def render_report() -> None:
-    """Editor reportů: záložky, vizuální karty, ukládání do JSON + mazání (sidebar i editor)."""
-    if "oec" not in st.session_state or not st.session_state.get("oec"):
-        st.error("Nejprve se přihlas do modulu Požáry a zadej své OEČ.")
+    if st.button(
+        f"➕ Přidat {kind_label[:-1].lower()}",
+        key=f"add_{key_prefix}_{report_id}",
+        use_container_width=True,
+    ):
+        items.append({"typ": "Fyzická osoba"})
+
+    if not items:
+        st.info(f"Žádný {kind_label[:-1].lower()} zatím není přidán.")
+        return items
+
+    for i, item in enumerate(list(items)):
+        with st.expander(f"{kind_label[:-1]} #{i+1}", expanded=True):
+            typ = st.selectbox(
+                "Typ",
+                options=["Fyzická osoba", "Právnická osoba", "OSVČ"],
+                index=["Fyzická osoba", "Právnická osoba", "OSVČ"].index(item.get("typ", "Fyzická osoba")),
+                key=f"{key_prefix}_{i}_typ_{report_id}",
+            )
+
+            if typ == "Fyzická osoba":
+                c1, c2, c3 = st.columns([1, 1, 1])
+                with c1:
+                    jmeno = st.text_input("Jméno", value=item.get("jmeno", ""), key=f"{key_prefix}_{i}_fo_jmeno_{report_id}")
+                with c2:
+                    prijmeni = st.text_input("Příjmení", value=item.get("prijmeni", ""), key=f"{key_prefix}_{i}_fo_prijmeni_{report_id}")
+                with c3:
+                    narozeni = st.date_input("Datum narození", value=_safe_date(item.get("narozeni")), key=f"{key_prefix}_{i}_fo_narozeni_{report_id}")
+                addr = _addr_inputs(f"{key_prefix}_{i}_fo_addr_{report_id}", item.get("bydliste", {}))
+                op = st.text_input("Číslo OP", value=item.get("op", ""), key=f"{key_prefix}_{i}_fo_op_{report_id}")
+                upd = {"typ": typ, "jmeno": jmeno, "prijmeni": prijmeni, "narozeni": narozeni, "bydliste": addr, "op": op}
+
+            elif typ == "Právnická osoba":
+                obchodni_nazev = st.text_input("Obchodní název", value=item.get("obchodni_nazev", ""), key=f"{key_prefix}_{i}_po_nazev_{report_id}")
+                ico = st.text_input("IČO", value=item.get("ico", ""), key=f"{key_prefix}_{i}_po_ico_{report_id}")
+                st.markdown("**Sídlo**")
+                sidlo = _addr_inputs(f"{key_prefix}_{i}_po_sidlo_{report_id}", item.get("sidlo", {}))
+                st.markdown("**Odpovědný zástupce**")
+                c1, c2, c3 = st.columns([1, 1, 1])
+                with c1:
+                    z_jmeno = st.text_input("Jméno", value=item.get("zastupce", {}).get("jmeno", ""), key=f"{key_prefix}_{i}_po_zjm_{report_id}")
+                with c2:
+                    z_prijmeni = st.text_input("Příjmení", value=item.get("zastupce", {}).get("prijmeni", ""), key=f"{key_prefix}_{i}_po_zpr_{report_id}")
+                with c3:
+                    z_narozeni = st.date_input("Datum narození", value=_safe_date(item.get("zastupce", {}).get("narozeni")), key=f"{key_prefix}_{i}_po_znar_{report_id}")
+                z_addr = _addr_inputs(f"{key_prefix}_{i}_po_zaddr_{report_id}", item.get("zastupce", {}).get("bydliste", {}))
+                z_op = st.text_input("Číslo OP", value=item.get("zastupce", {}).get("op", ""), key=f"{key_prefix}_{i}_po_zop_{report_id}")
+                upd = {"typ": typ, "obchodni_nazev": obchodni_nazev, "ico": ico, "sidlo": sidlo,
+                       "zastupce": {"jmeno": z_jmeno, "prijmeni": z_prijmeni, "narozeni": z_narozeni, "bydliste": z_addr, "op": z_op}}
+
+            else:  # OSVČ
+                c1, c2, c3 = st.columns([1, 1, 1])
+                with c1:
+                    jmeno = st.text_input("Jméno", value=item.get("jmeno", ""), key=f"{key_prefix}_{i}_osvc_jmeno_{report_id}")
+                with c2:
+                    prijmeni = st.text_input("Příjmení", value=item.get("prijmeni", ""), key=f"{key_prefix}_{i}_osvc_prijmeni_{report_id}")
+                with c3:
+                    narozeni = st.date_input("Datum narození", value=_safe_date(item.get("narozeni")), key=f"{key_prefix}_{i}_osvc_narozeni_{report_id}")
+                ico = st.text_input("IČ", value=item.get("ico", ""), key=f"{key_prefix}_{i}_osvc_ico_{report_id}")
+                addr = _addr_inputs(f"{key_prefix}_{i}_osvc_addr_{report_id}", item.get("bydliste", {}))
+                op = st.text_input("Číslo OP", value=item.get("op", ""), key=f"{key_prefix}_{i}_osvc_op_{report_id}")
+                upd = {"typ": typ, "jmeno": jmeno, "prijmeni": prijmeni, "narozeni": narozeni, "ico": ico, "bydliste": addr, "op": op}
+
+            cL, cR = st.columns([1, 1])
+            with cL:
+                if st.button("🗑️ Smazat", key=f"del_{key_prefix}_{i}_{report_id}", use_container_width=True):
+                    items.pop(i)
+                    st.rerun()
+            with cR:
+                st.caption("")
+
+            items[i] = upd
+
+    return items
+
+
+def render_sketch_window(rid: str):
+    st.warning("Tento režim už není nutný. Použij plátno v listu Náčrtek (má i režim celé obrazovky).")
+
+
+# ============ Hlavní render ============
+def render_report():
+    _force_wide_layout_css()
+    st.markdown("## 📝 Report")
+
+    oec = _current_oec()
+    if not oec:
+        q = _get_query_params()
+        oec_q = q.get("oec")
+        if isinstance(oec_q, list):
+            oec_q = oec_q[0]
+        if oec_q:
+            st.session_state["oec"] = str(oec_q)
+            oec = str(oec_q)
+    if not oec:
+        st.error("Chybí OEČ v relaci. Vrať se prosím o krok zpět a přihlaš se.")
         st.stop()
 
-    _inject_section_css()
-    oec = st.session_state["oec"]
-    st.session_state.setdefault("current_report_id", None)
+    q_all = _get_query_params()
+    if q_all.get("oec") != oec:
+        q_all["oec"] = oec
+        _set_query_params(q_all)
 
-    st.markdown("### 📝 Report – evidence zjištění na požářišti")
-
-    # >>> SIDEBAR_START
-    # ---- Sidebar ----
+    # ===== Sidebar =====
     with st.sidebar:
-        st.markdown("#### 📂 Moje reporty")
-        debug_show_all = st.checkbox("Zobrazit všechny reporty (debug)", value=False, key="report_debug_all")
-        all_reports = _collect_reports()
-        my_reports = all_reports if debug_show_all else list_reports_for_oec(oec)
-        rid_options = [r["report_id"] for r in my_reports]
+        st.markdown("### 📄 Reporty")
+        if st.button("➕ Založit nový report", use_container_width=True, key="sb_btn_new_report"):
+            rid = _gen_report_id(oec)
+            data = _ensure_report_skeleton(rid, oec)
+            _write_json(_report_path(rid), data)
+            st.session_state.current_report_id = rid
+            st.session_state[f"report_data_{rid}"] = data
+            st.rerun()
 
-        st.caption(f"Nalezeno: **{len(my_reports)}** | Úložiště: `{REPORTS_BASE.resolve()}`")
+        my_reports_all = _list_reports_for(oec)
+        recent = my_reports_all[:5]
 
-        chosen = None
-        open_btn = False
-        if rid_options:
-            current_label = st.session_state.current_report_id or "—"
-            st.caption(f"Aktuální: **{current_label}**")
-            labels = [
-                f"{(r.get('title') or _default_title(r.get('oec',''), r.get('created_at')))}"
-                f"{(' — ' + r.get('location')) if r.get('location') else ''} | {r['report_id']}"
-                for r in my_reports
-            ]
-            idx_map = {labels[i]: rid_options[i] for i in range(len(labels))}
-            chosen_label = st.selectbox("Otevřít existující report", labels, index=0, key="report_sel_open")
-            open_btn = st.button("Otevřít vybraný", use_container_width=True, key="report_btn_open")
-            chosen = idx_map.get(chosen_label)
+        if recent:
+            st.caption("Posledních 5")
+            for r in recent:
+                c1, c2, c3 = st.columns([4.5, 1, 1])
+                with c1:
+                    if st.button(f"📄 {r['title']}", key=f"sb_open_{r['id']}", use_container_width=True):
+                        st.session_state.current_report_id = r["id"]
+                        p_open = _report_path(r["id"])
+                        st.session_state[f"report_data_{r['id']}"] = _read_json(p_open)
+                        st.rerun()
+                with c2:
+                    if st.button("✏️", key=f"sb_rename_{r['id']}", help="Přejmenovat", use_container_width=True):
+                        st.session_state["rename_target"] = r["id"]
+                        st.session_state["rename_value"] = r["title"]
+                        st.rerun()
+                with c3:
+                    if st.button("🗑️", key=f"sb_del_{r['id']}", help="Smazat report", use_container_width=True):
+                        st.session_state["confirm_del"] = r["id"]
+                        st.rerun()
 
-            st.markdown("##### Akce s vybraným")
-            col_del1, col_del2 = st.columns([1, 1])
-            del_confirm = col_del1.checkbox("Potvrdit smazání", key="report_sidebar_del_confirm")
-            del_btn = col_del2.button("🗑️ Smazat vybraný", key="report_sidebar_del_btn", use_container_width=True, disabled=not del_confirm)
-            if del_btn and chosen:
-                try:
-                    shutil.rmtree(_report_dir(chosen))
-                    if st.session_state.current_report_id == chosen:
-                        st.session_state.current_report_id = None
-                    st.success(f"Report {chosen} smazán.")
-                    st.session_state["_suppress_auto_open"] = True
+                if st.session_state.get("rename_target") == r["id"]:
+                    newname = st.text_input("Nový název", value=st.session_state.get("rename_value", r["title"]), key=f"sb_rename_input_{r['id']}")
+                    rc1, rc2 = st.columns(2)
+                    with rc1:
+                        if st.button("Uložit název", key=f"sb_rename_save_{r['id']}", use_container_width=True):
+                            pth = _report_path(r["id"])
+                            d = _read_json(pth)
+                            d.setdefault("meta", {})["title"] = (newname or r["id"]).strip()
+                            _write_json(pth, d)
+                            st.session_state.pop(f"report_data_{r['id']}", None)
+                            st.session_state.pop("rename_target", None)
+                            st.session_state.pop("rename_value", None)
+                            st.rerun()
+                    with rc2:
+                        if st.button("Zrušit", key=f"sb_rename_cancel_{r['id']}", use_container_width=True):
+                            st.session_state.pop("rename_target", None)
+                            st.session_state.pop("rename_value", None)
+                            st.rerun()
+
+        conf = st.session_state.get("confirm_del")
+        if conf:
+            st.warning(f"Opravdu smazat report: {conf}?")
+            cc1, cc2 = st.columns(2)
+            with cc1:
+                if st.button("Ano, smazat", key="sb_del_yes", use_container_width=True):
+                    try:
+                        _report_path(conf).unlink(missing_ok=True)
+                        attach_dir = _attachments_dir(conf)
+                        if attach_dir.exists() and attach_dir.is_dir():
+                            for x in attach_dir.glob("*"):
+                                try:
+                                    x.unlink(missing_ok=True)
+                                except Exception:
+                                    pass
+                            try:
+                                attach_dir.rmdir()
+                            except Exception:
+                                pass
+                        st.session_state.pop(f"report_data_{conf}", None)
+                        if st.session_state.get("current_report_id") == conf:
+                            st.session_state.current_report_id = None
+                    except Exception:
+                        pass
+                    st.session_state.pop("confirm_del", None)
                     st.rerun()
-                except Exception as e:
-                    st.error(f"Chyba při mazání: {e}")
-        else:
-            st.info("Zatím nemáš žádné uložené reporty.")
+            with cc2:
+                if st.button("Ne, ponechat", key="sb_del_no", use_container_width=True):
+                    st.session_state.pop("confirm_del", None)
+                    st.rerun()
 
         st.markdown("---")
-        new_btn_sidebar = st.button("➕ Nový report", use_container_width=True, key="report_btn_new_sidebar")
-    # <<< SIDEBAR_END
-
-    # >>> NEW_OPEN_ACTIONS_START
-    # Akce: nový (sidebar)
-    if new_btn_sidebar:
-        new_id = _new_report_id(oec)
-        data = _empty_report(oec, new_id)
-        try:
-            save_report(data)
-        except Exception as e:
-            st.error(f"Ukládání selhalo: {e}")
-            st.stop()
-        st.session_state["_open_on_next_run"] = new_id
-        st.rerun()
-
-    # Akce: otevřít
-    if open_btn and chosen:
-        st.session_state.current_report_id = chosen
-        st.rerun()
-
-    # One-shot: otevři report po založení
-    if st.session_state.get("_open_on_next_run"):
-        st.session_state.current_report_id = st.session_state.pop("_open_on_next_run")
-        st.rerun()
-    # <<< NEW_OPEN_ACTIONS_END
-
-    # >>> CTA_NO_SELECTED_START
-    # ---- Pokud není vybrán report, ukážeme CTA (bez auto-open) ----
-    if not st.session_state.current_report_id:
-        st.info("Vyber existující report v levém panelu nebo založ nový.")
-        if st.button("➕ Založit nový report", key="report_btn_new_main", use_container_width=True):
-            new_id = _new_report_id(oec)
-            data = _empty_report(oec, new_id)
-            try:
-                save_report(data)
-            except Exception as e:
-                st.error(f"Ukládání selhalo: {e}")
-                st.stop()
-            st.session_state["_open_on_next_run"] = new_id
-            st.rerun()
-        # reset potlačení po jednom běhu
-        if st.session_state.get("_suppress_auto_open"):
-            st.session_state["_suppress_auto_open"] = False
-        st.stop()
-    # <<< CTA_NO_SELECTED_END
-
-    # >>> EDITOR_PREP_START
-    # ---- Editor vybraného reportu ----
-    report_id = st.session_state.current_report_id
-    data = load_report(report_id) or _empty_report(oec, report_id)
-
-    # Migrace starších polí
-    ev = data.setdefault("event", {})
-    ev.setdefault("date_occurrence", ev.get("date") or datetime.now().strftime("%Y-%m-%d"))
-    ev.setdefault("time_occurrence", ev.get("time") or datetime.now().strftime("%H:%M"))
-    ev.setdefault("date_observed", ev.get("date_occurrence"))
-    ev.setdefault("time_observed", ev.get("time_occurrence"))
-    ev.setdefault("date_kopis", ev.get("date_occurrence"))
-    ev.setdefault("time_kopis", ev.get("time_occurrence"))
-    loc = ev.setdefault("location", {})
-    for k in ["region", "city", "street", "house_number", "orientation_number", "parcel_number", "address"]:
-        loc.setdefault(k, "")
-    for k in ["gps_lat", "gps_lon"]:
-        if k not in loc:
-            loc[k] = None
-
-    if not data.get("oec"):
-        data["oec"] = oec
-        try:
-            save_report(data)
-        except Exception as e:
-            st.warning(f"Autoopravné uložení selhalo: {e}")
-
-    st.markdown(f"**Report ID:** `{report_id}`")
-    # <<< EDITOR_PREP_END
-
-    # >>> TOPBAR_CLOSE_START
-    if st.button("⬅️ Zavřít report", key=f"report_close_btn_top_{report_id}", use_container_width=True):
-        st.session_state.current_report_id = None
-        st.session_state["_suppress_auto_open"] = True
-        st.rerun()
-    # <<< TOPBAR_CLOSE_END
-
-    # >>> GEO_FROM_URL_START
-    # Geolokace z URL (HTTPS only)
-    params = st.query_params
-    geo_lat = params.get("geo_lat")
-    geo_lon = params.get("geo_lon")
-    if geo_lat and geo_lon:
-        try:
-            st.session_state[f"gps_lat_{report_id}"] = float(geo_lat)
-            st.session_state[f"gps_lon_{report_id}"] = float(geo_lon)
-            try:
-                if "geo_lat" in params: del params["geo_lat"]
-                if "geo_lon" in params: del params["geo_lon"]
-                if "geo_ts" in params: del params["geo_ts"]
-            except Exception:
-                pass
-        except (TypeError, ValueError):
-            pass
-    # <<< GEO_FROM_URL_END
-
-    # >>> FORM_START
-    # ====== FORM + TABS ======
-    with st.form(f"report_form_{report_id}"):
-        tab_event, tab_people, tab_cond, tab_find, tab_notes = st.tabs(
-            ["Událost", "Účastníci", "Podmínky", "Zjištění", "Poznámky"]
-        )
-
-        # --- Událost ---
-        with tab_event:
-            # >>> EVENT_SECTION_START
-            _card("Identifikace události", icon="📌", tag="Sekce 1")
-
-            # 1) Datum/čas
-            c_dt1, c_dt2, c_dt3 = st.columns(3)
-            with c_dt1:
-                try:
-                    d_occ = datetime.strptime(ev["date_occurrence"], "%Y-%m-%d").date()
-                except Exception:
-                    d_occ = datetime.now().date()
-                t_occ = ev.get("time_occurrence", "00:00")
-                try:
-                    hh, mm = map(int, t_occ.split(":")[:2])
-                    t_occ_val = dtime(hour=hh, minute=mm)
-                except Exception:
-                    t_occ_val = dtime(hour=0, minute=0)
-                date_occurrence = st.date_input("Datum vzniku", value=d_occ, key=f"date_occ_{report_id}")
-                time_occurrence = st.time_input(
-                    "Čas vzniku", value=t_occ_val, step=timedelta(minutes=1), key=f"time_occ_{report_id}"
-                )
-
-            with c_dt2:
-                try:
-                    d_obs = datetime.strptime(ev["date_observed"], "%Y-%m-%d").date()
-                except Exception:
-                    d_obs = datetime.now().date()
-                t_obs = ev.get("time_observed", "00:00")
-                try:
-                    hh, mm = map(int, t_obs.split(":")[:2])
-                    t_obs_val = dtime(hour=hh, minute=mm)
-                except Exception:
-                    t_obs_val = dtime(hour=0, minute=0)
-                date_observed = st.date_input("Datum zpozorování", value=d_obs, key=f"date_obs_{report_id}")
-                time_observed = st.time_input(
-                    "Čas zpozorování", value=t_obs_val, step=timedelta(minutes=1), key=f"time_obs_{report_id}"
-                )
-
-            with c_dt3:
-                try:
-                    d_kp = datetime.strptime(ev["date_kopis"], "%Y-%m-%d").date()
-                except Exception:
-                    d_kp = datetime.now().date()
-                t_kp = ev.get("time_kopis", "00:00")
-                try:
-                    hh, mm = map(int, t_kp.split(":")[:2])
-                    t_kp_val = dtime(hour=hh, minute=mm)
-                except Exception:
-                    t_kp_val = dtime(hour=0, minute=0)
-                date_kopis = st.date_input("Datum ohlášení na KOPIS", value=d_kp, key=f"date_kp_{report_id}")
-                time_kopis = st.time_input(
-                    "Čas ohlášení na KOPIS", value=t_kp_val, step=timedelta(minutes=1), key=f"time_kp_{report_id}"
-                )
-
-            # 2) Základní info
-            c1, c2, c3 = st.columns([1, 1, 1])
-            with c1:
-                event_number = st.text_input("Číslo jednací / spisová značka", value=ev.get("event_number", ""))
-            with c2:
-                obj_opts = ["", "Rodinný dům", "Byt", "Průmyslový objekt", "Vozidlo", "Volné prostranství", "Jiné"]
-                obj_val = ev.get("object_type", "")
-                object_type = st.selectbox("Typ objektu", obj_opts, index=obj_opts.index(obj_val) if obj_val in obj_opts else 0)
-            with c3:
-                title = st.text_input("Název / Stručný popis události", value=ev.get("title", ""))
-
-            # 3) Adresa – rozpad
-            _card("Adresa", icon="📍")
-            l1, l2, l3 = st.columns([1, 1, 1])
-            with l1:
-                region = st.text_input("Kraj", value=loc.get("region", ""))
-                city = st.text_input("Město/Obec", value=loc.get("city", ""))
-            with l2:
-                street = st.text_input("Ulice", value=loc.get("street", ""))
-                house_number = st.text_input("Číslo popisné", value=str(loc.get("house_number", "")))
-            with l3:
-                orientation_number = st.text_input("Číslo orientační", value=str(loc.get("orientation_number", "")))
-                parcel_number = st.text_input("Číslo parcelní", value=str(loc.get("parcel_number", "")))
-            _card_end()
-
-            # 4) GPS + zaměření
-            _card("GPS souřadnice", icon="🗺️")
-            key_lat = f"gps_lat_{report_id}"
-            key_lon = f"gps_lon_{report_id}"
-            if key_lat not in st.session_state:
-                st.session_state[key_lat] = float(loc.get("gps_lat") or 0.0)
-            if key_lon not in st.session_state:
-                st.session_state[key_lon] = float(loc.get("gps_lon") or 0.0)
-
-            c4, c5, c6 = st.columns([1, 1, 1])
-            with c4:
-                gps_lat_val = st.number_input("GPS – šířka (lat)", value=st.session_state[key_lat], step=0.0001, format="%.6f", key=key_lat)
-            with c5:
-                gps_lon_val = st.number_input("GPS – délka (lon)", value=st.session_state[key_lon], step=0.0001, format="%.6f", key=key_lon)
-            with c6:
-                geo_submit = st.form_submit_button("📍 Zaměřit polohu (mobil)", use_container_width=True)
-            _card_end()
-
-            # 5) Popis
-            st.text_area("Popis události", value=ev.get("description", ""), key=f"report_desc_{report_id}", height=120)
-            _card_end()
-            # <<< EVENT_SECTION_END
-
-        # --- Účastníci ---
-        with tab_people:
-            # >>> PEOPLE_SECTION_START
-            _card("Zúčastněné osoby a jednotky", icon="👥", tag="Sekce 2")
-            c6, c7, c8 = st.columns(3)
-            with c6:
-                investigators_str = st.text_input("Vyšetřovatelé (OEČ, oddělené čárkou)", value=",".join(data["participants"].get("investigators", [])))
-            with c7:
-                commander = st.text_input("Velitel zásahu", value=data["participants"].get("commander", ""))
-            with c8:
-                units = st.text_input("Jednotky / složky", value=data["participants"].get("units", ""))
-            assist = st.text_input("Asistující orgány (Policie ČR, znalci…)", value=data["participants"].get("assist", ""))
-            _card_end()
-            # <<< PEOPLE_SECTION_END
-
-        # --- Podmínky ---
-        with tab_cond:
-            # >>> CONDITIONS_SECTION_START
-            _card("Podmínky prostředí", icon="🌦️", tag="Sekce 3")
-            c9, c10, c11 = st.columns(3)
-            with c9:
-                weather = st.text_input("Počasí", value=data["conditions"].get("weather", ""))
-            with c10:
-                temperature_c = st.number_input("Teplota [°C]", value=float(data["conditions"].get("temperature_c") or 0.0), step=0.5, format="%.1f")
-            with c11:
-                visibility = st.text_input("Viditelnost", value=data["conditions"].get("visibility", ""))
-            _card_end()
-            # <<< CONDITIONS_SECTION_END
-
-        # --- Zjištění ---
-        with tab_find:
-            # >>> FINDINGS_SECTION_START
-            _card("Technická zjištění", icon="🛠️", tag="Sekce 4")
-            c12, c13, c14 = st.columns(3)
-            with c12:
-                origin = st.text_input("Místo vzniku", value=data["findings"].get("origin", ""))
-            with c13:
-                cause = st.text_input("Pravděpodobná příčina", value=data["findings"].get("cause", ""))
-            with c14:
-                damage_estimate_czk = st.number_input("Odhad škody [Kč]", value=float(data["findings"].get("damage_estimate_czk") or 0.0), step=1000.0, format="%.0f")
-            _card_end()
-            # <<< FINDINGS_SECTION_END
-
-        # --- Poznámky ---
-        with tab_notes:
-            # >>> NOTES_SECTION_START
-            _card("Volné poznámky", icon="📝", tag="Sekce 5")
-            notes = st.text_area("Poznámky", value=data.get("notes", ""), height=160)
-            _card_end()
-            # <<< NOTES_SECTION_END
-
-        # >>> GEOLOC_ACTION_START
-        # === Akce bez uložení (geolokace) ===
-        if 'geo_submit' in locals() and geo_submit:
-            html(
-                """
-                <script>
-                (function(){
-                  if (!navigator.geolocation) {
-                    alert("Geolokace není v tomto prohlížeči dostupná.");
-                    return;
-                  }
-                  navigator.geolocation.getCurrentPosition(function(pos){
-                      const lat = pos.coords.latitude.toFixed(6);
-                      const lon = pos.coords.longitude.toFixed(6);
-                      const url = new URL(window.location.href);
-                      url.searchParams.set('geo_lat', lat);
-                      url.searchParams.set('geo_lon', lon);
-                      url.searchParams.set('geo_ts', Date.now().toString());
-                      window.history.replaceState({}, '', url);
-                      window.location.reload();
-                  }, function(err){
-                      alert("Nepodařilo se získat polohu: " + err.message);
-                  }, {enableHighAccuracy:true, timeout:10000, maximumAge:0});
-                })();
-                </script>
-                """,
-                height=0,
-            )
-            st.stop()
-        # <<< GEOLOC_ACTION_END
-
-        # >>> SAVE_BUTTONS_START
-        # --- Uložení ---
-        col_save, col_close = st.columns([1, 1])
-        save_draft = col_save.form_submit_button("💾 Uložit průběh", use_container_width=True)
-        save_and_close = col_close.form_submit_button("✅ Uložit a zavřít", use_container_width=True)
-        # <<< SAVE_BUTTONS_END
-
-        # >>> SAVE_HANDLER_START
-        if save_draft or save_and_close:
-            data["updated_at"] = _now_iso()
-            data["oec"] = oec
-
-            # Událost – časová pole
-            ev["date_occurrence"] = date_occurrence.strftime("%Y-%m-%d")
-            ev["time_occurrence"] = time_occurrence.strftime("%H:%M")
-            ev["date_observed"] = date_observed.strftime("%Y-%m-%d")
-            ev["time_observed"] = time_observed.strftime("%H:%M")
-            ev["date_kopis"] = date_kopis.strftime("%Y-%m-%d")
-            ev["time_kopis"] = time_kopis.strftime("%H:%M")
-            ev["date"] = ev["date_occurrence"]
-            ev["time"] = ev["time_occurrence"]
-
-            # Událost – ostatní
-            ev["event_number"] = event_number
-            ev["object_type"] = object_type
-            ev["title"] = title or _default_title(oec, data.get("created_at"))
-
-            # Adresa
-            loc["region"] = region
-            loc["city"] = city
-            loc["street"] = street
-            loc["house_number"] = house_number
-            loc["orientation_number"] = orientation_number
-            loc["parcel_number"] = parcel_number
-            loc["address"] = _fmt_addr(loc)
-
-            # GPS
-            ev["location"]["gps_lat"] = float(st.session_state.get(f"gps_lat_{report_id}", 0.0)) or None
-            ev["location"]["gps_lon"] = float(st.session_state.get(f"gps_lon_{report_id}", 0.0)) or None
-
-            # Popis
-            ev["description"] = st.session_state.get(f"report_desc_{report_id}", "")
-
-            # Účastníci
-            inv_list = [x.strip() for x in (investigators_str or "").split(",") if x.strip()]
-            data["participants"]["investigators"] = inv_list or [oec]
-            data["participants"]["commander"] = commander
-            data["participants"]["units"] = units
-            data["participants"]["assist"] = assist
-
-            # Podmínky
-            data["conditions"]["weather"] = weather
-            data["conditions"]["temperature_c"] = float(temperature_c) if temperature_c is not None else None
-            data["conditions"]["visibility"] = visibility
-
-            # Zjištění
-            data["findings"]["origin"] = origin
-            data["findings"]["cause"] = cause
-            data["findings"]["damage_estimate_czk"] = float(damage_estimate_czk) if damage_estimate_czk is not None else None
-
-            try:
-                save_report(data)
-            except Exception as e:
-                st.error(f"Uložení selhalo: {e}")
-            else:
-                st.success("Report uložen.")
-                if save_and_close:
-                    st.session_state.current_report_id = None
-                    st.session_state["_suppress_auto_open"] = True
+        st.caption("Všechny moje reporty")
+        if my_reports_all:
+            options = {f"{r['title']} ({r['id']})": r['id'] for r in my_reports_all}
+            sel_label = st.selectbox("Vyber report", list(options.keys()), key="sb_select_any")
+            sel_id = options.get(sel_label)
+            if st.button("Otevřít", key="sb_open_selected", use_container_width=True):
+                st.session_state.current_report_id = sel_id
+                p_open2 = _report_path(sel_id)
+                st.session_state[f"report_data_{sel_id}"] = _read_json(p_open2)
                 st.rerun()
-        # <<< SAVE_HANDLER_END
-    # <<< FORM_END
+        else:
+            st.info("Zatím nemáš žádný report.")
+
+    # ===== Hlavní plátno =====
+    rid = st.session_state.get("current_report_id")
+    if not rid:
+        st.info("Vyber existující report vlevo, nebo klikni **Založit nový report** v levém panelu.")
+        st.stop()
+
+    p = _report_path(rid)
+    if not p.exists():
+        st.error("Soubor reportu nenalezen. Vyber jiný nebo založ nový.")
+        st.stop()
+
+    session_key = f"report_data_{rid}"
+    if session_key not in st.session_state:
+        st.session_state[session_key] = _read_json(p)
+    data = st.session_state[session_key]
+
+    # Titulek + akce
+    tcol1, tcol2, tcol3 = st.columns([3, 1, 1])
+    with tcol1:
+        use_custom = st.checkbox("Použít vlastní název", value=(data.get("meta", {}).get("title") != rid), key=f"use_custom_{rid}")
+        if use_custom:
+            new_title = st.text_input("Název reportu", value=data.get("meta", {}).get("title") or rid, key=f"title_{rid}")
+            data.setdefault("meta", {})["title"] = (new_title.strip() or rid)
+        else:
+            st.text_input("Název reportu (ID)", value=rid, key=f"title_readonly_{rid}", disabled=True)
+            if data.get("meta", {}).get("title") != rid:
+                data["meta"]["title"] = rid
+    with tcol2:
+        if st.button("💾 Uložit průběh", key=f"save_{rid}", use_container_width=True):
+            _write_json(p, data)
+            st.success("Uloženo.")
+    with tcol3:
+        if st.button("💾✅ Uložit a zavřít", key=f"save_close_{rid}", use_container_width=True):
+            _write_json(p, data)
+            st.session_state.pop(session_key, None)
+            st.session_state.current_report_id = None
+            st.rerun()
+
+    if st.button("🚪 Zavřít bez uložení", key=f"close_{rid}", use_container_width=True):
+        st.session_state.pop(session_key, None)
+        st.session_state.current_report_id = None
+        st.rerun()
 
     st.markdown("---")
 
-    # >>> DELETE_SECTION_START
-    # Bezpečné mazání reportu uvnitř editoru
-    with st.expander("🗑️ Smazat tento report", expanded=False):
-        col1, col2 = st.columns([1, 1])
-        confirm = col1.checkbox("Rozumím, chci smazat", key=f"del_confirm_{report_id}")
-        if col2.button("🗑️ Smazat report", key=f"del_btn_{report_id}", use_container_width=True, disabled=not confirm):
-            try:
-                shutil.rmtree(_report_dir(report_id))
-                st.success("Report smazán.")
-                st.session_state.current_report_id = None
-                st.session_state["_suppress_auto_open"] = True
-                st.rerun()
-            except Exception as e:
-                st.error(f"Chyba při mazání: {e}")
-    # <<< DELETE_SECTION_END
+    # =================== LISTY ===================
+    tab_event, tab_cond, tab_part, tab_witness, tab_sketch = st.tabs(["Událost", "Podmínky", "Účastníci", "Svědectví", "Náčrtek"])
 
-    # >>> BACK_BUTTON_START
-    if st.button("⬅️ Zpět na výběr reportu", key=f"report_back_bottom_{report_id}", use_container_width=True):
-        st.session_state.current_report_id = None
-        st.session_state["_suppress_auto_open"] = True
-        st.rerun()
-    # <<< BACK_BUTTON_END
-# >>> RENDER_REPORT_END
+    # ========== Událost ==========
+    with tab_event:
+        st.subheader("📆 Událost")
+        ev = data.get("event") or {}
+        step_min = dt.timedelta(minutes=1)
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            ev["datum_vzniku"] = st.date_input("Datum vzniku", value=_safe_date(ev.get("datum_vzniku")), key=f"ev_dv_{rid}").isoformat()
+        with c2:
+            ev["cas_vzniku"] = st.time_input("Čas vzniku", value=_safe_time(ev.get("cas_vzniku")), step=step_min, key=f"ev_cv_{rid}").strftime("%H:%M:%S")
+        with c3:
+            st.caption("")
+
+        c4, c5, c6 = st.columns(3)
+        with c4:
+            ev["datum_zpozorovani"] = st.date_input("Datum zpozorování", value=_safe_date(ev.get("datum_zpozorovani")), key=f"ev_dz_{rid}").isoformat()
+        with c5:
+            ev["cas_zpozorovani"] = st.time_input("Čas zpozorování", value=_safe_time(ev.get("cas_zpozorovani")), step=step_min, key=f"ev_cz_{rid}").strftime("%H:%M:%S")
+        with c6:
+            st.caption("")
+
+        c7, c8, c9 = st.columns(3)
+        with c7:
+            ev["datum_ohlaseni"] = st.date_input("Datum ohlášení na KOPIS", value=_safe_date(ev.get("datum_ohlaseni")), key=f"ev_do_{rid}").isoformat()
+        with c8:
+            ev["cas_ohlaseni"] = st.time_input("Čas ohlášení na KOPIS", value=_safe_time(ev.get("cas_ohlaseni")), step=step_min, key=f"ev_co_{rid}").strftime("%H:%M:%S")
+        with c9:
+            st.caption("")
+
+        st.markdown("**Adresa**")
+        addr = ev.get("adresa") or {}
+        a1, a2, a3 = st.columns([1, 1, 1])
+        with a1:
+            addr["kraj"] = st.text_input("Kraj", value=addr.get("kraj", ""), key=f"addr_kraj_{rid}")
+            addr["obec"] = st.text_input("Obec / Město", value=addr.get("obec", ""), key=f"addr_obec_{rid}")
+        with a2:
+            addr["ulice"] = st.text_input("Ulice", value=addr.get("ulice", ""), key=f"addr_ulice_{rid}")
+            addr["cp"] = st.text_input("Číslo popisné", value=addr.get("cp", ""), key=f"addr_cp_{rid}")
+        with a3:
+            addr["co"] = st.text_input("Číslo orientační", value=addr.get("co", ""), key=f"addr_co_{rid}")
+            addr["parcelni"] = st.text_input("Číslo parcelní", value=addr.get("parcelni", ""), key=f"addr_parc_{rid}")
+            addr["psc"] = st.text_input("PSČ", value=addr.get("psc", ""), key=f"addr_psc_{rid}")
+        ev["adresa"] = addr
+        data["event"] = ev
+
+    # ========== Podmínky ==========
+    with tab_cond:
+        st.subheader("🌦️ Podmínky prostředí")
+        cond = data.get("conditions") or {}
+        c9, c10, c11 = st.columns(3)
+        with c9:
+            cond["weather"] = st.text_input("Počasí", value=cond.get("weather", ""), key=f"cond_w_{rid}")
+        with c10:
+            prev_temp = cond.get("temperature_c", 0)
+            try:
+                prev_temp = float(prev_temp)
+            except Exception:
+                prev_temp = 0.0
+            temperature_c = st.number_input("Teplota [°C]", value=float(round(prev_temp)), step=1.0, format="%.0f", key=f"cond_t_{rid}")
+            cond["temperature_c"] = int(temperature_c)
+        with c11:
+            cond["visibility"] = st.text_input("Viditelnost", value=cond.get("visibility", ""), key=f"cond_vis_{rid}")
+        data["conditions"] = cond
+
+    # ========== Účastníci ==========
+    with tab_part:
+        st.subheader("👥 Účastníci")
+        participants = data.get("participants") or {"owners": [], "users": []}
+        owners = participants.get("owners", [])
+        users = participants.get("users", [])
+
+        owners = _render_party_list("Majitelé", "owners", owners, rid)
+        st.markdown("---")
+        users = _render_party_list("Uživatelé", "users", users, rid)
+
+        participants["owners"] = owners
+        participants["users"] = users
+        data["participants"] = participants
+
+    # ========== Svědectví ==========
+    with tab_witness:
+        st.subheader("🗣️ Svědectví")
+        data["witnesses"] = st.text_area("Záznam svědectví / výpovědí", value=data.get("witnesses", ""), height=220, key=f"wit_{rid}")
+
+    # ========== Náčrtek ==========
+    with tab_sketch:
+        st.subheader("📝 Náčrtek")
+        data["sketch"] = st.text_area(
+            "Poznámka k náčrtku (popis, orientace, měřítko apod.)",
+            value=data.get("sketch", ""),
+            height=120,
+            key=f"sketch_note_{rid}",
+        )
+
+        # ---------------- HTML5 canvas — FIX: plná šířka, stabilní fullscreen, grid jako overlay ----------------
+        st.markdown("#### 1) ✏️ Kreslení zde")
+
+        import streamlit.components.v1 as components
+
+        # Podklad a rastr
+        st.markdown("**Podklad a rastr**")
+        bg_file = st.file_uploader(
+            "Podkladový obrázek (PNG/JPG) — volitelné",
+            type=["png", "jpg", "jpeg"],
+            key=_ui_key("sk_bg", rid),
+        )
+        bg_dataurl = ""
+        if bg_file is not None:
+            try:
+                raw = bg_file.getvalue()
+                mime = bg_file.type or "image/png"
+                b64 = base64.b64encode(raw).decode("ascii")
+                bg_dataurl = f"data:{mime};base64,{b64}"
+            except Exception:
+                bg_dataurl = ""
+        grid_on = st.checkbox("Zapnout rastr", value=False, key=_ui_key("sk_grid_on", rid))
+        grid_step = st.slider("Hustota rastru [px]", 20, 120, 40, key=_ui_key("sk_grid_step", rid))
+
+        fname = f"sketch_{uuid.uuid4().hex}.png"
+
+        html = """
+        <style>
+          .sk-root { width: 100%; }
+          .sk-toolbar {
+            width: 100%; display:flex; flex-wrap:wrap; gap:.75rem;
+            align-items:center; justify-content:space-between; margin-bottom:10px;
+          }
+          .sk-toolbar button, .sk-toolbar label, .sk-toolbar input[type=color]{ font-size:1rem; }
+          .sk-toolbar button{ padding:.65rem 1rem; border-radius:10px; border:1px solid #666; background:#f5f5f5; }
+          .sk-toolbar input[type=range]{ width:220px; }
+          .sk-toolbar input[type=color]{ height:44px; width:44px; padding:0; border:none; }
+          .sk-toolbar input[type=checkbox]{ transform:scale(1.4); margin-right:.35rem; }
+          .sk-stage {
+            position:relative; width:100%;
+            border:1px solid #444; border-radius:8px; background:#fff; overflow:hidden;
+            touch-action:none; /* pro pero/tyč */
+          }
+          canvas.sk-draw, canvas.sk-grid {
+            position:absolute; inset:0; display:block; width:100%; height:100%;
+          }
+          canvas.sk-grid { pointer-events:none; } /* grid nebrání kreslení */
+          @media (pointer:coarse){
+            .sk-toolbar button{ padding:.8rem 1.2rem; }
+          }
+        </style>
+
+        <div id="skRoot" class="sk-root">
+          <div class="sk-toolbar">
+            <div style="display:flex;gap:.75rem;align-items:center;flex-wrap:wrap;">
+              <label> Tloušťka
+                <input id='skThickness' type='range' min='1' max='40' value='4'>
+              </label>
+              <label style="display:flex;align-items:center;gap:.5rem;">
+                <input id='skEraser' type='checkbox'> Guma
+              </label>
+              <label style="display:flex;align-items:center;gap:.5rem;">
+                Barva <input id='skColor' type='color' value='#000000'>
+              </label>
+            </div>
+            <div style="display:flex;gap:.75rem;flex-wrap:wrap;align-items:center;">
+              <button id='skUndo'>↶ Zpět</button>
+              <button id='skRedo'>↷ Znovu</button>
+              <button id='skClear'>🧹 Vyčistit</button>
+              <button id='skDownload'>💾 Uložit PNG</button>
+              <button id='skFS'>🖥️ Celá obrazovka</button>
+            </div>
+          </div>
+
+          <div id="skStage" class="sk-stage">
+            <canvas id="skCanvas" class="sk-draw"></canvas>
+            <canvas id="skGrid" class="sk-grid"></canvas>
+          </div>
+          <div id='skHint' style='color:#888;margin-top:6px'>Kresli myší/stylusem. Změna nástrojů nemá vliv na již nakreslené.</div>
+        </div>
+
+        <script>
+        (function(){
+          const RID = '[[RID]]';
+          const storageKey = 'sketch_'+RID;
+          const BG_DATA  = '[[BG_DATAURL]]';
+          const SHOW_GRID = [[GRID_ON]];
+          const GRID_STEP = [[GRID_STEP]];
+          const DOWNLOAD_NAME = '[[FILENAME]]';
+
+          const root = document.getElementById('skRoot');
+          const stage = document.getElementById('skStage');
+          const canvas = document.getElementById('skCanvas');    // kreslení
+          const gridCv = document.getElementById('skGrid');      // overlay grid
+          const ctx = canvas.getContext('2d');
+          const gtx = gridCv.getContext('2d');
+
+          const elT = document.getElementById('skThickness');
+          const elC = document.getElementById('skColor');
+          const elE = document.getElementById('skEraser');
+          const elUndo = document.getElementById('skUndo');
+          const elRedo = document.getElementById('skRedo');
+          const elClear = document.getElementById('skClear');
+          const elDL = document.getElementById('skDownload');
+          const elFS = document.getElementById('skFS');
+
+          let drawing=false, lastX=0, lastY=0;
+          let undoStack=[], redoStack=[];
+          let bgImg = null;
+
+          function dpr(){ return window.devicePixelRatio || 1; }
+
+          function isFullscreen(){
+            return document.fullscreenElement && (document.fullscreenElement===root || root.contains(document.fullscreenElement));
+          }
+
+          function stageCssSize(){
+            // v normálním režimu šířka = kontejner, ve fullscreen = celé okno
+            const w = isFullscreen() ? window.innerWidth  : Math.max(300, stage.clientWidth || root.clientWidth || 800);
+            const h = isFullscreen() ? (window.innerHeight - 12) : Math.max(480, Math.min(window.innerHeight - 220, 1600));
+            return {w, h};
+          }
+
+          function setCanvasSize(){
+            const {w, h} = stageCssSize();
+            const r = dpr();
+
+            // nastav CSS rozměry stage – ať se roztáhne na plnou šířku
+            stage.style.width = w + 'px';
+            stage.style.height = h + 'px';
+
+            // nastav fyzické bitmapy obou canvasů s ohledem na HiDPI
+            [canvas, gridCv].forEach(cv=>{
+              cv.style.width = w + 'px';
+              cv.style.height = h + 'px';
+              cv.width  = Math.floor(w * r);
+              cv.height = Math.floor(h * r);
+            });
+
+            // kreslit v souřadnicích CSS px
+            ctx.setTransform(r,0,0,r,0,0);
+            gtx.setTransform(r,0,0,r,0,0);
+
+            // překreslit pozadí + obsah + grid
+            repaintAll();
+          }
+
+          function clearCanvas(){
+            const {w,h} = stageCssSize();
+            ctx.fillStyle = '#FFFFFF';
+            ctx.fillRect(0,0,w,h);
+          }
+
+          function drawBG(){
+            const {w,h} = stageCssSize();
+            if (bgImg){
+              try { ctx.drawImage(bgImg, 0,0, w,h); } catch(e){}
+            }
+          }
+
+          function drawGrid(){
+            const {w,h} = stageCssSize();
+            gtx.clearRect(0,0,w,h);
+            if (!SHOW_GRID) return;
+            gtx.save();
+            gtx.strokeStyle = '#e0e0e0';
+            gtx.lineWidth = 1;
+            gtx.beginPath();
+            for(let x=GRID_STEP; x<w; x+=GRID_STEP){ gtx.moveTo(x,0); gtx.lineTo(x,h); }
+            for(let y=GRID_STEP; y<h; y+=GRID_STEP){ gtx.moveTo(0,y); gtx.lineTo(w,y); }
+            gtx.stroke();
+            gtx.restore();
+          }
+
+          function snapshot(){
+            try { return canvas.toDataURL('image/png'); } catch(e){ return null; }
+          }
+
+          function restoreFrom(dataUrl, cb){
+            if (!dataUrl) { if (cb) cb(); return; }
+            const img = new Image();
+            img.onload = ()=>{ 
+              const {w,h} = stageCssSize();
+              ctx.drawImage(img, 0,0, w,h);
+              if (cb) cb();
+            };
+            img.src = dataUrl;
+          }
+
+          function saveLocal(){ try { localStorage.setItem(storageKey, canvas.toDataURL('image/png')); } catch(e){} }
+
+          function styleFromUI(){
+            const width = parseInt(elT.value||'4');
+            const eraser = !!elE.checked;
+            ctx.lineCap='round'; ctx.lineJoin='round'; ctx.lineWidth=width;
+            ctx.strokeStyle = eraser ? '#FFFFFF' : (elC.value||'#000000');
+          }
+
+          function pos(e){
+            const rect = canvas.getBoundingClientRect();
+            const p = (e.pointerType) ? e : (e.touches && e.touches[0] ? e.touches[0] : e);
+            const x = p.clientX - rect.left;
+            const y = p.clientY - rect.top;
+            return [x,y];
+          }
+
+          function start(e){ drawing=true; styleFromUI(); const p=pos(e); lastX=p[0]; lastY=p[1]; ctx.beginPath(); ctx.moveTo(lastX,lastY); e.preventDefault(); }
+          function move(e){ if(!drawing) return; const p=pos(e); ctx.lineTo(p[0],p[1]); ctx.stroke(); lastX=p[0]; lastY=p[1]; e.preventDefault(); }
+          function end(){ if(!drawing) return; drawing=false; ctx.closePath(); pushUndo(); saveLocal(); }
+
+          function pushUndo(){ try { undoStack.push(canvas.toDataURL('image/png')); if (undoStack.length>50) undoStack.shift(); } catch(e){}; redoStack=[]; }
+
+          function repaintAll(){
+            const keep = snapshot();      // obsah před změnou velikosti
+            clearCanvas();
+            drawBG();
+            restoreFrom(keep, ()=>{ drawGrid(); }); // grid jako overlay po obnově
+          }
+
+          // Události
+          window.addEventListener('resize', ()=>setCanvasSize());
+          document.addEventListener('fullscreenchange', ()=>setCanvasSize());
+
+          canvas.addEventListener('pointerdown', (e)=>{ start(e); if (canvas.setPointerCapture) canvas.setPointerCapture(e.pointerId); });
+          canvas.addEventListener('pointermove', (e)=>{ move(e); });
+          window.addEventListener('pointerup', ()=>end());
+          window.addEventListener('pointercancel', ()=>end());
+          canvas.addEventListener('pointerleave', ()=>end());
+
+          elClear.onclick = ()=>{ pushUndo(); clearCanvas(); drawBG(); drawGrid(); saveLocal(); };
+          elUndo.onclick = ()=>{ if(undoStack.length){ const d=undoStack.pop(); redoStack.push(canvas.toDataURL('image/png')); clearCanvas(); drawBG(); restoreFrom(d, ()=>{ drawGrid(); saveLocal(); }); } };
+          elRedo.onclick = ()=>{ if(redoStack.length){ const d=redoStack.pop(); undoStack.push(canvas.toDataURL('image/png')); clearCanvas(); drawBG(); restoreFrom(d, ()=>{ drawGrid(); saveLocal(); }); } };
+          elDL.onclick   = ()=>{ const a=document.createElement('a'); a.download=DOWNLOAD_NAME; a.href=canvas.toDataURL('image/png'); a.click(); };
+          elFS.onclick   = ()=>{ if (root.requestFullscreen) root.requestFullscreen(); };
+
+          // Načtení podkladu (není-li, jen vymažeme a nakreslíme grid)
+          if (BG_DATA){
+            bgImg = new Image();
+            bgImg.onload = ()=>{ setCanvasSize(); };
+            bgImg.src = BG_DATA;
+          } else {
+            setCanvasSize();
+          }
+
+          // případná data z localStorage
+          (function(){
+            const d = localStorage.getItem(storageKey);
+            if (d){
+              restoreFrom(d, ()=>{ drawGrid(); });
+              try { undoStack.push(d); } catch(e){}
+            }
+          })();
+        })();
+        </script>
+        """
+
+        html = html.replace("[[RID]]", rid)
+        html = html.replace("[[BG_DATAURL]]", bg_dataurl or "")
+        html = html.replace("[[GRID_ON]]", "true" if grid_on else "false")
+        html = html.replace("[[GRID_STEP]]", str(int(grid_step)))
+        html = html.replace("[[FILENAME]]", fname)
+
+        # vysoký iframe kvůli pohodlnému kreslení
+        components.html(html, height=1400, scrolling=False)
+
+        st.markdown("> 💡 Tip: **Celá obrazovka** zvětší plátno přes celé zařízení. Po návratu zůstane kresba zachována.")
+
+        # 2) Nahrát soubor
+        st.markdown("#### 2) 📤 Nahrát náčrtek (PNG/JPG/PDF)")
+        up = st.file_uploader(
+            "Nahraj soubor s náčrtkem",
+            type=["png", "jpg", "jpeg", "pdf"],
+            key=_ui_key("sketch_upload", rid),
+        )
+        if up is not None:
+            save_dir = _attachments_dir(rid)
+            ext = Path(up.name).suffix
+            fname2 = f"sketch_{uuid.uuid4().hex}{ext}"
+            dest2 = save_dir / fname2
+            with dest2.open("wb") as f:
+                f.write(up.getbuffer())
+            atts = data.get("attachments") or []
+            atts.append({
+                "type": "sketch",
+                "name": up.name,
+                "file": str(dest2),
+                "uploaded": _now().isoformat(timespec="seconds"),
+            })
+            data["attachments"] = atts
+            _write_json(p, data)
+            st.success("Soubor uložen k reportu.")
+
+        # 3) Fotoaparát – až na klik
+        st.markdown("#### 3) 📸 Vyfotit tabletem/zařízením")
+        cam_flag_key = _ui_key("camera_open", rid)
+        c1, c2 = st.columns([1, 4])
+        with c1:
+            if st.button("📸 Otevřít fotoaparát", key=_ui_key("camera_btn", rid), use_container_width=True):
+                st.session_state[cam_flag_key] = True
+        with c2:
+            if st.session_state.get(cam_flag_key):
+                photo = st.camera_input("Pořídit fotografii náčrtku", key=_ui_key("camera", rid))
+            else:
+                photo = None
+
+        if photo is not None:
+            save_dir = _attachments_dir(rid)
+            ext3 = ".jpg"
+            if getattr(photo, 'type', '') == 'image/png':
+                ext3 = ".png"
+            fname3 = f"sketch_cam_{uuid.uuid4().hex}{ext3}"
+            dest3 = save_dir / fname3
+            with dest3.open("wb") as f:
+                f.write(photo.getbuffer())
+            atts = data.get("attachments") or []
+            atts.append({
+                "type": "sketch",
+                "name": fname3,
+                "file": str(dest3),
+                "uploaded": _now().isoformat(timespec="seconds"),
+            })
+            data["attachments"] = atts
+            _write_json(p, data)
+            st.success("Fotografie uložena k reportu.")
+
+        # Uložené náčrtky
+        atts = [a for a in data.get("attachments", []) if a.get("type") == "sketch"]
+        if atts:
+            st.markdown("**Uložené náčrty**")
+            for a in atts:
+                st.write(f"• {a.get('name')} ({a.get('file')}) – {a.get('uploaded')}")
+        else:
+            st.info("Zatím nejsou uloženy žádné náčrtky.")
+
+    st.markdown("---")
+
+    # Poznámky
+    st.subheader("🗒️ Poznámky (společné)")
+    data["notes"] = st.text_area("Poznámky", value=data.get("notes", ""), key=f"notes_{rid}", height=140)
+
+    st.markdown("---")
+
+    # Akční tlačítka dole
+    b1, b2, b3 = st.columns(3)
+    with b1:
+        if st.button("💾 Uložit průběh (dole)", key=f"save2_{rid}", use_container_width=True):
+            _write_json(p, data)
+            st.success("Uloženo.")
+    with b2:
+        if st.button("💾✅ Uložit a zavřít (dole)", key=f"save_close2_{rid}", use_container_width=True):
+            _write_json(p, data)
+            st.session_state.pop(session_key, None)
+            st.session_state.current_report_id = None
+            st.rerun()
+    with b3:
+        if st.button("🚪 Zavřít bez uložení (dole)", key=f"close2_{rid}", use_container_width=True):
+            st.session_state.pop(session_key, None)
+            st.session_state.current_report_id = None
+            st.rerun()
