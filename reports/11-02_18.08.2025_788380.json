@@ -1,0 +1,75 @@
+{
+  "meta": {
+    "id": "11:02_18.08.2025_788380",
+    "oec": "788380",
+    "created": "2025-08-18T11:02:24",
+    "title": "11:02_18.08.2025_788380",
+    "version": 2
+  },
+  "event": {
+    "datum_vzniku": "2025-08-18",
+    "cas_vzniku": "00:00:00",
+    "datum_zpozorovani": "2025-08-18",
+    "cas_zpozorovani": "00:00:00",
+    "datum_ohlaseni": "2025-08-18",
+    "cas_ohlaseni": "00:00:00",
+    "adresa": {
+      "kraj": "",
+      "obec": "",
+      "ulice": "",
+      "cp": "",
+      "co": "",
+      "parcelni": "",
+      "psc": ""
+    },
+    "gps": {
+      "lat": null,
+      "lon": null,
+      "pozn": ""
+    }
+  },
+  "conditions": {
+    "weather": "",
+    "temperature_c": 0,
+    "visibility": ""
+  },
+  "participants": {
+    "owners": [],
+    "users": []
+  },
+  "witnesses": "",
+  "sketch": "",
+  "attachments": [
+    {
+      "type": "sketch",
+      "name": "sketch_df1612f8f99c4a6fb7b7d18dd6303501.png",
+      "file": "reports\\11-02_18.08.2025_788380\\sketch_6608f18e53994176b751c72a0cb52320.png",
+      "uploaded": "2025-08-18T13:32:01"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_df1612f8f99c4a6fb7b7d18dd6303501.png",
+      "file": "reports\\11-02_18.08.2025_788380\\sketch_5de942703c054d3b94acb74e473bb460.png",
+      "uploaded": "2025-08-18T13:39:13"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_ca3f2cb4471b4465a949777c9ea9dffa.jpg",
+      "file": "reports\\11-02_18.08.2025_788380\\sketch_cam_ca3f2cb4471b4465a949777c9ea9dffa.jpg",
+      "uploaded": "2025-08-18T13:39:13"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_df1612f8f99c4a6fb7b7d18dd6303501.png",
+      "file": "reports\\11-02_18.08.2025_788380\\sketch_df3b7eddb45a4132844988a131132caa.png",
+      "uploaded": "2025-08-18T13:42:47"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_e6a9ac1f9bf7445bb2671fb24b760f87.jpg",
+      "file": "reports\\11-02_18.08.2025_788380\\sketch_cam_e6a9ac1f9bf7445bb2671fb24b760f87.jpg",
+      "uploaded": "2025-08-18T13:42:47"
+    }
+  ],
+  "notes": ""
+}
