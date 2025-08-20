@@ -1,0 +1,93 @@
+{
+  "meta": {
+    "id": "14:20_19.08.2025_788380",
+    "oec": "788380",
+    "created": "2025-08-19T14:20:02",
+    "title": "14:20_19.08.2025_788380",
+    "version": 3
+  },
+  "event": {
+    "datum_vzniku": "2025-08-19",
+    "cas_vzniku": "00:00:00",
+    "datum_zpozorovani": "2025-08-19",
+    "cas_zpozorovani": "00:00:00",
+    "datum_ohlaseni": "2025-08-19",
+    "cas_ohlaseni": "00:00:00",
+    "adresa": {
+      "kraj": "",
+      "obec": "",
+      "ulice": "",
+      "cp": "",
+      "co": "",
+      "parcelni": "",
+      "psc": ""
+    },
+    "gps": {
+      "lat": null,
+      "lon": null,
+      "pozn": ""
+    }
+  },
+  "conditions": {
+    "weather": "",
+    "temperature_c": 0,
+    "visibility": ""
+  },
+  "participants": {
+    "owners": [],
+    "users": []
+  },
+  "witnesses": "",
+  "sketch": "",
+  "attachments": [
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142110.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142110.jpg",
+      "uploaded": "2025-08-19T14:21:10"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142114.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142114.jpg",
+      "uploaded": "2025-08-19T14:21:14"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142230.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142230.jpg",
+      "uploaded": "2025-08-19T14:22:30"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142233.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142233.jpg",
+      "uploaded": "2025-08-19T14:22:33"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142254.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142254.jpg",
+      "uploaded": "2025-08-19T14:22:54"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142255.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142255.jpg",
+      "uploaded": "2025-08-19T14:22:55"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142300.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142300.jpg",
+      "uploaded": "2025-08-19T14:23:00"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_142301.jpg",
+      "file": "reports\\14-20_19.08.2025_788380\\sketch_cam_20250819_142301.jpg",
+      "uploaded": "2025-08-19T14:23:01"
+    }
+  ],
+  "notes": ""
+}
