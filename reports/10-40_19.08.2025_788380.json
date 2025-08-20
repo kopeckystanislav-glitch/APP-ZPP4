@@ -1,0 +1,63 @@
+{
+  "meta": {
+    "id": "10:40_19.08.2025_788380",
+    "oec": "788380",
+    "created": "2025-08-19T10:40:27",
+    "title": "10:40_19.08.2025_788380",
+    "version": 3
+  },
+  "event": {
+    "datum_vzniku": "2025-08-19",
+    "cas_vzniku": "00:00:00",
+    "datum_zpozorovani": "2025-08-19",
+    "cas_zpozorovani": "00:00:00",
+    "datum_ohlaseni": "2025-08-19",
+    "cas_ohlaseni": "00:00:00",
+    "adresa": {
+      "kraj": "Plzeňský",
+      "obec": "",
+      "ulice": "",
+      "cp": "",
+      "co": "",
+      "parcelni": "",
+      "psc": ""
+    },
+    "gps": {
+      "lat": null,
+      "lon": null,
+      "pozn": ""
+    }
+  },
+  "conditions": {
+    "weather": "",
+    "temperature_c": 0,
+    "visibility": ""
+  },
+  "participants": {
+    "owners": [],
+    "users": []
+  },
+  "witnesses": "",
+  "sketch": "",
+  "attachments": [
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_104711.jpg",
+      "file": "reports\\10-40_19.08.2025_788380\\sketch_cam_20250819_104711.jpg",
+      "uploaded": "2025-08-19T10:47:11"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_104721.jpg",
+      "file": "reports\\10-40_19.08.2025_788380\\sketch_cam_20250819_104721.jpg",
+      "uploaded": "2025-08-19T10:47:21"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_104729.jpg",
+      "file": "reports\\10-40_19.08.2025_788380\\sketch_cam_20250819_104729.jpg",
+      "uploaded": "2025-08-19T10:47:29"
+    }
+  ],
+  "notes": ""
+}

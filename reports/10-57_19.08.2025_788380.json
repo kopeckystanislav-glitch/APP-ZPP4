@@ -1,0 +1,111 @@
+{
+  "meta": {
+    "id": "10:57_19.08.2025_788380",
+    "oec": "788380",
+    "created": "2025-08-19T10:57:35",
+    "title": "10:57_19.08.2025_788380",
+    "version": 3
+  },
+  "event": {
+    "datum_vzniku": "2025-08-19",
+    "cas_vzniku": "00:00:00",
+    "datum_zpozorovani": "2025-08-19",
+    "cas_zpozorovani": "00:00:00",
+    "datum_ohlaseni": "2025-08-19",
+    "cas_ohlaseni": "00:00:00",
+    "adresa": {
+      "kraj": "",
+      "obec": "",
+      "ulice": "",
+      "cp": "",
+      "co": "",
+      "parcelni": "",
+      "psc": ""
+    },
+    "gps": {
+      "lat": null,
+      "lon": null,
+      "pozn": ""
+    }
+  },
+  "conditions": {
+    "weather": "",
+    "temperature_c": 0,
+    "visibility": ""
+  },
+  "participants": {
+    "owners": [],
+    "users": []
+  },
+  "witnesses": "",
+  "sketch": "",
+  "attachments": [
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_105759.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_105759.jpg",
+      "uploaded": "2025-08-19T10:57:59"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_105847.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_105847.jpg",
+      "uploaded": "2025-08-19T10:58:47"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_105854.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_105854.jpg",
+      "uploaded": "2025-08-19T10:58:54"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_105945.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_105945.jpg",
+      "uploaded": "2025-08-19T10:59:45"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110628.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110628.jpg",
+      "uploaded": "2025-08-19T11:06:28"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110630.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110630.jpg",
+      "uploaded": "2025-08-19T11:06:30"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110631.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110631.jpg",
+      "uploaded": "2025-08-19T11:06:31"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110632.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110632.jpg",
+      "uploaded": "2025-08-19T11:06:32"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110634.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110634.jpg",
+      "uploaded": "2025-08-19T11:06:34"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110635.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110635.jpg",
+      "uploaded": "2025-08-19T11:06:35"
+    },
+    {
+      "type": "sketch",
+      "name": "sketch_cam_20250819_110637.jpg",
+      "file": "reports\\10-57_19.08.2025_788380\\sketch_cam_20250819_110637.jpg",
+      "uploaded": "2025-08-19T11:06:37"
+    }
+  ],
+  "notes": ""
+}
